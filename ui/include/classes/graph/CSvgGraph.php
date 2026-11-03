@@ -327,23 +327,37 @@ class CSvgGraph extends CSvg {
 	}
 
 	/**
-	 * Get the value range of the metrics per Y axis side; null values if the side has no data. Requires prepare().
+	 * Get the value range of the metrics per Y axis side (null values if not calculated), and whether the side has
+	 * no metrics with data. Requires prepare().
 	 */
 	public function getValueRange(): array {
 		return [
-			GRAPH_YAXIS_SIDE_LEFT => ['min' => $this->min_value_left, 'max' => $this->max_value_left],
-			GRAPH_YAXIS_SIDE_RIGHT => ['min' => $this->min_value_right, 'max' => $this->max_value_right]
+			GRAPH_YAXIS_SIDE_LEFT => [
+				'min' => $this->min_value_left,
+				'max' => $this->max_value_left,
+				'empty' => $this->left_y_empty
+			],
+			GRAPH_YAXIS_SIDE_RIGHT => [
+				'min' => $this->min_value_right,
+				'max' => $this->max_value_right,
+				'empty' => $this->right_y_empty
+			]
 		];
 	}
 
 	/**
 	 * Extend the value range by the range of another graph (from its getValueRange()), so that both graphs get the
 	 * same Y axes. Requires prepare(); the Y axis minimum and maximum set in the options still take precedence.
+	 * A side without data of its own gets the scale of the other graph instead of the default empty scale.
 	 */
 	public function extendValueRange(array $range): self {
 		foreach ([GRAPH_YAXIS_SIDE_LEFT => 'left', GRAPH_YAXIS_SIDE_RIGHT => 'right'] as $side => $name) {
 			$min = $range[$side]['min'];
 			$max = $range[$side]['max'];
+
+			if (!$range[$side]['empty']) {
+				$this->{$name.'_y_empty'} = false;
+			}
 
 			if ($min !== null && ($this->{'min_value_'.$name} === null || $this->{'min_value_'.$name} > $min)) {
 				$this->{'min_value_'.$name} = $min;

@@ -99,9 +99,11 @@ class CSvgGraphHelper {
 
 		$svg_height = max(0, $height - ($legend !== null ? $legend->getHeight() : 0));
 
+		// Separate graphs need room for two graphs; otherwise (very small widgets) both periods are drawn in one graph.
 		if ($options['comparison'] !== null
 				&& ($options['comparison_layout'] ?? WidgetForm::COMPARE_LAYOUT_OVERLAY)
 					== WidgetForm::COMPARE_LAYOUT_SEPARATE
+				&& $svg_height >= CSvgGraph::getHeightForCanvas(0, false) + CSvgGraph::getHeightForCanvas(0)
 				&& array_filter($metrics, [self::class, 'isComparison'])) {
 			return self::getSeparateGraphs($metrics, $options, $width, $svg_height, $legend, $errors);
 		}

@@ -703,10 +703,13 @@ function toggleMessageBoxDetails(element) {
  * @param {string}     legend_class
  */
 function downloadSvgImage(svg, file_name, legend_class = '') {
-	var $dom_node = jQuery(svg),
+	// More than one SVG (graphs shown one below another): all are drawn into one image, with the legend after the last.
+	const svgs = Array.isArray(svg) ? svg : [svg];
+	var $dom_node = jQuery(svgs[0]),
 		canvas = document.createElement('canvas'),
-		labels = $dom_node.next(legend_class),
+		labels = jQuery(svgs[svgs.length - 1]).next(legend_class),
 		$clone = $dom_node.clone(),
+		graphs_height = svgs.reduce((height, svg) => height + jQuery(svg).height(), 0),
 		$container = $dom_node.closest('.dashboard-grid-widget-contents'),
 		image = new Image,
 		a = document.createElement('a'),
@@ -727,7 +730,12 @@ function downloadSvgImage(svg, file_name, legend_class = '') {
 	});
 
 	canvas.width = $dom_node.width()
-	canvas.height = $dom_node.height() + labels_height;
+	canvas.height = graphs_height + labels_height;
+
+	// Further SVGs are nested into the clone of the first one, each below the previous.
+	for (let i = 1, y = $dom_node.height(); i < svgs.length; y += jQuery(svgs[i]).height(), i++) {
+		$clone.append(jQuery(svgs[i]).clone().attr({x: 0, y}));
+	}
 	context2d = canvas.getContext('2d');
 	image.onload = function() {
 		context2d.drawImage(image, 0, 0);

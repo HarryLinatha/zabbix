@@ -42,7 +42,7 @@
 			data = graph.data('options');
 
 		if (data) {
-			if (!data.isHintBoxFrozen && !data.isTriggerHintBoxFrozen) {
+			if (!hasFrozenHint(graph)) {
 				graph.data('widget')._resumeUpdating();
 			}
 
@@ -115,6 +115,15 @@
 		return svgs.length > 1 && svgs.includes(graph[0]) ? svgs.map((svg) => jQuery(svg)) : [graph];
 	}
 
+	// Check if the graph or a graph linked to it has a frozen (static) hint; widget refresh is paused while it has.
+	function hasFrozenHint(graph) {
+		return getLinkedGraphs(graph).some((linked_graph) => {
+			const data = linked_graph.data('options');
+
+			return data !== undefined && (data.isHintBoxFrozen || data.isTriggerHintBoxFrozen);
+		});
+	}
+
 	// Hide vertical helper line and highlighted data points.
 	function hideHelper(graph) {
 		for (const linked_graph of getLinkedGraphs(graph)) {
@@ -149,10 +158,14 @@
 			graph.data('widget')._pauseUpdating();
 
 			graph.hintBoxItem.on('onDeleteHint.hintBox', function(e) {
-				graph.data('widget')._resumeUpdating();
-
 				data.isTriggerHintBoxFrozen = false;
 				data.isHintBoxFrozen = false; // Unfreeze because only unfrozen hintboxes can be removed.
+
+				// Refresh stays paused while a linked graph still has a frozen hint.
+				if (!hasFrozenHint(graph)) {
+					graph.data('widget')._resumeUpdating();
+				}
+
 				graph.off('mouseup', hintboxSilentMode);
 				destroyHintbox(graph);
 			});

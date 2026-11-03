@@ -137,6 +137,15 @@
 		});
 	}
 
+	// Check if a time period is being selected (SBox) in the graph or in a graph linked to it.
+	function isLinkedBoxing(graph) {
+		return getLinkedGraphs(graph).some((linked_graph) => {
+			const data = linked_graph.data('options');
+
+			return data !== undefined && data.boxing === true;
+		});
+	}
+
 	// Hide vertical helper line and highlighted data points.
 	function hideHelper(graph) {
 		for (const linked_graph of getLinkedGraphs(graph)) {
@@ -151,6 +160,11 @@
 			data = graph.data('options'),
 			hbox = graph.data('hintbox'),
 			content = hbox ? hbox.find('> div') : null;
+
+		// No hint is frozen while a time period is being selected (also when it ends over a linked graph).
+		if (isLinkedBoxing(graph)) {
+			return;
+		}
 
 		// One frozen hint per widget: a frozen hint of a linked graph is closed first.
 		for (const linked_graph of getLinkedGraphs(graph)) {
@@ -597,7 +611,7 @@
 			return;
 		}
 
-		if (data.boxing === true) {
+		if (isLinkedBoxing(graph)) {
 			hideHelper(graph);
 			return;
 		}
@@ -917,7 +931,7 @@
 			return;
 		}
 
-		if (data.boxing === true) {
+		if (isLinkedBoxing(graph)) {
 			hideHelper(graph);
 			return;
 		}

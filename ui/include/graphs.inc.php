@@ -63,6 +63,23 @@ function graph_item_drawtype2str($drawtype) {
 	}
 }
 
+/**
+ * Get the "Compare with" period of a chart image request from the request parameters "compare" (one of
+ * GRAPH_COMPARE_*) and "compare_value" (custom shift or start date).
+ *
+ * An invalid custom value results in no comparison rather than an error image, so that requests for the image
+ * height only (sbox) keep working.
+ *
+ * @param array $timeline  Graph time period, see getTimeSelectorPeriod().
+ *
+ * @return array|null  See CTimePeriodHelper::getComparisonPeriod().
+ */
+function getGraphComparisonPeriod(array $timeline): ?array {
+	return CTimePeriodHelper::getComparisonPeriod($timeline['from_ts'], $timeline['to_ts'],
+		(int) getRequest('compare', GRAPH_COMPARE_NONE), (string) getRequest('compare_value', '')
+	);
+}
+
 function getGraphDims($graphid = null) {
 	$graphDims = [];
 

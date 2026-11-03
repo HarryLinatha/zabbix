@@ -588,9 +588,33 @@
 			// Set position of mouse following helper line.
 			setHelperPosition(e, graph);
 
-			// Find values.
-			var points = findValues(graph[0], offsetX),
-				points_total = points.length,
+			// Time offset of the mouse position from the start of the graph period.
+			const offset = (offsetX - data.dimX) * data.spp;
+
+			// Find values. "Compare with" series are drawn below the main series, but listed after them, so that the
+			// row limit cuts comparison rows first. A comparison series ends early if its period is shorter than the
+			// graph period: its points past the end are left out (and not counted) and their highlight is hidden.
+			var points = [],
+				comparison_points = [];
+
+			findValues(graph[0], offsetX).forEach(function(point) {
+				if (!point.g.hasAttribute('data-comparison')) {
+					points.push(point);
+				}
+				else if (offset <= Number(point.g.getAttribute('data-comparison-length'))) {
+					comparison_points.push(point);
+				}
+				else {
+					var point_highlight = point.g.querySelectorAll('.svg-point-highlight')[0];
+
+					point_highlight.setAttribute('cx', -10);
+					point_highlight.setAttribute('cy', -10);
+				}
+			});
+
+			points = points.concat(comparison_points);
+
+			var points_total = points.length,
 				show_hint = false,
 				xy_point = false,
 				tolerance;
@@ -621,18 +645,11 @@
 			}
 			var rows_added = 0;
 
-			// Time offset of the mouse position from the start of the graph period.
-			const offset = (offsetX - data.dimX) * data.spp;
-
 			points.forEach(function(point) {
 				var point_highlight = point.g.querySelectorAll('.svg-point-highlight')[0];
-
-				// A "Compare with" series ends early, if its period is shorter than the graph period.
 				const is_comparison = point.g.hasAttribute('data-comparison');
-				const is_past_end = is_comparison
-					&& offset > Number(point.g.getAttribute('data-comparison-length'));
 
-				if (point.v !== null && !is_past_end && (xy_point === false || xy_point === point)) {
+				if (point.v !== null && (xy_point === false || xy_point === point)) {
 					point_highlight.setAttribute('cx', point.x);
 					point_highlight.setAttribute('cy', point.y);
 

@@ -197,7 +197,7 @@ class CSvgGraph {
 		const hintbox_items = hintbox.querySelectorAll('.has-broadcast-data');
 
 		for (const item of hintbox_items) {
-			const {itemid, ds} = item.dataset;
+			const {itemid, ds, comparison} = item.dataset;
 			const itemids = JSON.parse(item.dataset.itemids);
 
 			item.addEventListener('click', () => {
@@ -206,7 +206,7 @@ class CSvgGraph {
 			});
 
 			item.addEventListener('mouseenter', () => {
-				this.#setHighlighting(itemid, ds);
+				this.#setHighlighting(itemid, ds, comparison !== undefined);
 			});
 
 			item.addEventListener('mouseleave', () => {
@@ -228,15 +228,28 @@ class CSvgGraph {
 	#markSelectedHintboxItems(hintbox) {
 		const {itemid, ds} = this.#widget.getItemBroadcast();
 
+		// The broadcast item is the item of the main period, so "Compare with" rows are not marked as selected.
 		for (const item of hintbox.querySelectorAll('.has-broadcast-data')) {
-			item.classList.toggle('selected', item.dataset.itemid == itemid && item.dataset.ds == ds);
+			item.classList.toggle('selected', item.dataset.itemid == itemid && item.dataset.ds == ds
+				&& item.dataset.comparison === undefined
+			);
 		}
 	}
 
-	#setHighlighting(itemid, ds) {
+	/**
+	 * Highlight the graph series of an item. A "Compare with" series has the same item and data set as its original,
+	 * so the comparison flag tells them apart.
+	 *
+	 * @param {string}  itemid
+	 * @param {string}  ds
+	 * @param {boolean} is_comparison
+	 */
+	#setHighlighting(itemid, ds, is_comparison = false) {
 		this.#removeHighlighting();
 
-		const graph_element = this.#svg.querySelector(`[data-itemid="${itemid}"][data-ds="${ds}"]`);
+		const graph_element = this.#svg.querySelector(
+			`[data-itemid="${itemid}"][data-ds="${ds}"]${is_comparison ? '[data-comparison]' : ':not([data-comparison])'}`
+		);
 
 		if (graph_element) {
 			graph_element.classList.add('highlighted');
@@ -248,9 +261,9 @@ class CSvgGraph {
 		const selected_item = hintbox.querySelector('.has-broadcast-data.selected');
 
 		if (selected_item) {
-			const {itemid, ds} = selected_item.dataset;
+			const {itemid, ds, comparison} = selected_item.dataset;
 
-			this.#setHighlighting(itemid, ds);
+			this.#setHighlighting(itemid, ds, comparison !== undefined);
 		}
 		else {
 			this.#removeHighlighting();
@@ -809,15 +822,21 @@ class CSvgGraph {
 		const ul = document.createElement('ul');
 
 		// Calculate time at mouse position.
-		const time = new CDate(
-			(this.#time_period.from_ts + (offsetX - this.#dimX) * this.#spp) * 1000
-		);
+		const offset = (offsetX - this.#dimX) * this.#spp;
+		const time = new CDate((this.#time_period.from_ts + offset) * 1000);
 
 		const header = document.createElement('div');
 		header.classList.add('header');
 		header.append(time.format(PHP_ZBX_FULL_DATE_TIME));
 
 		for (const point of included_points) {
+			const {comparison, timeShift, comparisonLength} = point.g.dataset;
+
+			// A "Compare with" series ends early, if its period is shorter than the main one.
+			if (comparison !== undefined && offset > Number(comparisonLength)) {
+				continue;
+			}
+
 			const li = document.createElement('li');
 			li.classList.add('has-broadcast-data');
 			li.dataset.ds = point.g.dataset.ds;
@@ -828,7 +847,18 @@ class CSvgGraph {
 			color_span.style.backgroundColor = point.g.dataset.color;
 			color_span.classList.add('svg-graph-hintbox-item-color');
 
-			li.append(color_span, `${point.g.dataset.metric}: ${point.v}`);
+			if (comparison !== undefined) {
+				// Show the real time of the comparison value; the header shows the time of the main period.
+				const comparison_time = new CDate((this.#time_period.from_ts + offset + Number(timeShift)) * 1000);
+
+				li.dataset.comparison = comparison;
+				li.append(color_span,
+					`${point.g.dataset.metric}: ${point.v} (${comparison_time.format(PHP_ZBX_FULL_DATE_TIME)})`
+				);
+			}
+			else {
+				li.append(color_span, `${point.g.dataset.metric}: ${point.v}`);
+			}
 
 			ul.append(li);
 		}

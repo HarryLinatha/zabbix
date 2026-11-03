@@ -127,6 +127,16 @@
 		});
 	}
 
+	// Check if a graph linked to the given graph (not the graph itself) has a frozen hint.
+	function hasLinkedFrozenHint(graph) {
+		return getLinkedGraphs(graph).some((linked_graph) => {
+			const data = linked_graph.data('options');
+
+			return linked_graph[0] !== graph[0] && data !== undefined
+				&& (data.isHintBoxFrozen || data.isTriggerHintBoxFrozen);
+		});
+	}
+
 	// Hide vertical helper line and highlighted data points.
 	function hideHelper(graph) {
 		for (const linked_graph of getLinkedGraphs(graph)) {
@@ -583,8 +593,7 @@
 		}
 
 		// While a linked graph has a frozen hint, this graph shows no hint of its own (one hint per widget).
-		if (getLinkedGraphs(graph).some((linked_graph) => linked_graph[0] !== graph[0]
-				&& (linked_graph.data('options').isHintBoxFrozen || linked_graph.data('options').isTriggerHintBoxFrozen))) {
+		if (hasLinkedFrozenHint(graph)) {
 			return;
 		}
 
@@ -904,7 +913,7 @@
 		graph.data('simpleTriggersHintbox', false);
 		let html = null;
 
-		if (!data.showSimpleTriggers || data.isHintBoxFrozen === true) {
+		if (!data.showSimpleTriggers || data.isHintBoxFrozen === true || hasLinkedFrozenHint(graph)) {
 			return;
 		}
 

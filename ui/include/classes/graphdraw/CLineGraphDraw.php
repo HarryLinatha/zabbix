@@ -42,6 +42,20 @@ class CLineGraphDraw extends CGraphDraw {
 	private $ymax_type;
 	private $zero;
 
+	/**
+	 * "Compare with" period (see CTimePeriodHelper::getComparisonPeriod()) or null.
+	 *
+	 * @var array|null
+	 */
+	private $comparison = null;
+
+	/**
+	 * Whether the comparison copies of graph items have been added to $this->items.
+	 *
+	 * @var bool
+	 */
+	private $comparison_items_added = false;
+
 	public function __construct($type = GRAPH_TYPE_NORMAL) {
 		parent::__construct($type);
 
@@ -153,6 +167,88 @@ class CLineGraphDraw extends CGraphDraw {
 		$this->yaxis[$graph_item['yaxisside']] = true;
 
 		$this->num++;
+	}
+
+	/**
+	 * Draw every graph item also for the given comparison period, on the x-axis of the graph period.
+	 *
+	 * @param array|null $comparison  Result of CTimePeriodHelper::getComparisonPeriod().
+	 */
+	public function setComparison(?array $comparison): void {
+		$this->comparison = $comparison;
+	}
+
+	/**
+	 * Make the "Compare with" copy of a graph item: the same item, read for a shifted time period and drawn as a
+	 * dashed line (dots stay dots). The min/max band of "all" is not drawn for the copy, to keep the graph readable.
+	 *
+	 * @param array $graph_item
+	 * @param int   $time_shift  Comparison period start minus graph period start, in seconds.
+	 *
+	 * @return array
+	 */
+	public static function makeComparisonItem(array $graph_item, int $time_shift): array {
+		$graph_item['comparison'] = true;
+		$graph_item['time_shift'] = $time_shift;
+
+		if ($graph_item['drawtype'] != GRAPH_ITEM_DRAWTYPE_DOT
+				&& $graph_item['drawtype'] != GRAPH_ITEM_DRAWTYPE_BOLD_DOT) {
+			$graph_item['drawtype'] = GRAPH_ITEM_DRAWTYPE_DASHED_LINE;
+		}
+
+		if ($graph_item['calc_fnc'] == CALC_FNC_ALL) {
+			$graph_item['calc_fnc'] = CALC_FNC_AVG;
+		}
+
+		return $graph_item;
+	}
+
+	/**
+	 * Append a comparison copy of each graph item after all graph items, once. The order of the original items is
+	 * kept, because graph name macros like {HOST.HOST1} and stacking refer to items by position.
+	 */
+	private function addComparisonItems(): void {
+		if ($this->comparison === null || $this->comparison_items_added) {
+			return;
+		}
+
+		$this->comparison_items_added = true;
+		$num = $this->num;
+
+		for ($i = 0; $i < $num; $i++) {
+			$this->items[$this->num] = self::makeComparisonItem($this->items[$i], $this->comparison['shift']);
+			$this->num++;
+		}
+	}
+
+	/**
+	 * Get the order of items in the legend: each comparison copy right after its original.
+	 *
+	 * @return array  Item indexes.
+	 */
+	private function getLegendOrder(): array {
+		$order = [];
+
+		if ($this->comparison_items_added) {
+			$num = intdiv($this->num, 2);
+
+			for ($i = 0; $i < $num; $i++) {
+				$order[] = $i;
+				$order[] = $i + $num;
+			}
+		}
+		elseif ($this->num > 0) {
+			$order = range(0, $this->num - 1);
+		}
+
+		// Legends for stacked graphs are in reverse order, so that the order of items matches the lines on the graph.
+		if ($this->type == GRAPH_TYPE_STACKED) {
+			$order = $this->comparison_items_added
+				? array_merge(...array_reverse(array_chunk($order, 2)))
+				: array_reverse($order);
+		}
+
+		return $order;
 	}
 
 	public function setYMinAxisType($yaxistype) {
@@ -281,7 +377,10 @@ class CLineGraphDraw extends CGraphDraw {
 				}
 			}
 
-			$item['source'] = ($item['trends'] == 0 || (($time_now - $item['history']) < $this->from_time
+			// Comparison copies choose history or trends for their own (earlier) period.
+			$item_from_time = $this->from_time + ($item['time_shift'] ?? 0);
+
+			$item['source'] = ($item['trends'] == 0 || (($time_now - $item['history']) < $item_from_time
 					&& ($this->period / $this->sizeX) <= (ZBX_MAX_TREND_DIFF / ZBX_GRAPH_MAX_SKIP_CELL)))
 				? 'history'
 				: 'trends';
@@ -291,13 +390,38 @@ class CLineGraphDraw extends CGraphDraw {
 			$items[] = $item;
 		}
 
-		$results = Manager::History()->getGraphAggregationByWidth($items, $this->from_time, $this->to_time,
-			$this->sizeX
-		);
+		/*
+		 * Request data per time shift: results are keyed by item ID, so an item and its comparison copy cannot be in
+		 * the same request. Shifted requests use the same width and period, so that a value at the same offset from
+		 * the period start gets the same pixel index in both periods.
+		 */
+		$items_by_shift = [];
 
-		$results = self::populateValuesBetweenHeartbeats($items, $this->from_time, $this->to_time, $this->sizeX,
-			$results
-		);
+		foreach ($items as $i => $item) {
+			$items_by_shift[$item['time_shift'] ?? 0][$i] = $item;
+		}
+
+		$results_by_shift = [];
+
+		foreach ($items_by_shift as $time_shift => $shift_items) {
+			$results = Manager::History()->getGraphAggregationByWidth($shift_items, $this->from_time + $time_shift,
+				$this->to_time + $time_shift, $this->sizeX
+			);
+
+			$results_by_shift[$time_shift] = self::populateValuesBetweenHeartbeats($shift_items,
+				$this->from_time + $time_shift, $this->to_time + $time_shift, $this->sizeX, $results
+			);
+		}
+
+		/*
+		 * The comparison period can be shorter than the graph period (e.g. February compared to March). Comparison
+		 * copies are not drawn after its end.
+		 */
+		$comparison_last_idx = $this->comparison !== null
+			? min($this->sizeX, (int) floor($this->sizeX * ($this->comparison['to_ts'] - $this->comparison['from_ts'])
+				/ $this->period
+			))
+			: $this->sizeX;
 
 		// Series data is indexed like $this->items, so that the same item can be drawn more than once.
 		foreach ($items as $i => $item) {
@@ -309,11 +433,19 @@ class CLineGraphDraw extends CGraphDraw {
 				'clock' => []
 			];
 
+			$results = $results_by_shift[$item['time_shift'] ?? 0];
+			$last_idx = array_key_exists('comparison', $item) ? $comparison_last_idx : $this->sizeX;
+			$this->items[$i]['last_idx'] = $last_idx;
+
 			if (array_key_exists($item['itemid'], $results)) {
 				$result = $results[$item['itemid']];
 
 				foreach ($result['data'] as $data_row) {
 					$idx = $data_row['i'];
+
+					if ($idx > $last_idx) {
+						continue;
+					}
 
 					$data['count'][$idx] = $data_row['count'];
 					$data['min'][$idx] = (float) $data_row['min'];
@@ -334,7 +466,7 @@ class CLineGraphDraw extends CGraphDraw {
 				cj - count of missed in one go
 				dx - offset to first value (count to last existing point)
 			*/
-			for ($ci = 0, $cj = 0; $ci <= $this->sizeX; $ci++) {
+			for ($ci = 0, $cj = 0; $ci <= $last_idx; $ci++) {
 				if (!array_key_exists($ci, $data['count']) || ($data['count'][$ci] == 0)) {
 					$data['count'][$ci] = 0;
 					$data['shift_min'][$ci] = 0;
@@ -390,6 +522,14 @@ class CLineGraphDraw extends CGraphDraw {
 				}
 			}
 
+			// No values after the end of a shorter comparison period.
+			for ($ci = $last_idx + 1; $ci <= $this->sizeX; $ci++) {
+				$data['count'][$ci] = 0;
+				$data['shift_min'][$ci] = 0;
+				$data['shift_max'][$ci] = 0;
+				$data['shift_avg'][$ci] = 0;
+			}
+
 			$this->data[$i] = $data;
 		}
 
@@ -407,7 +547,8 @@ class CLineGraphDraw extends CGraphDraw {
 				for ($j = $i - 1; $j >= 0; $j--) {
 					$item2 = $this->items[$j];
 
-					if ($item2['yaxisside'] != $item1['yaxisside']) {
+					if ($item2['yaxisside'] != $item1['yaxisside']
+							|| ($item2['time_shift'] ?? 0) != ($item1['time_shift'] ?? 0)) {
 						continue;
 					}
 
@@ -588,7 +729,8 @@ class CLineGraphDraw extends CGraphDraw {
 
 		// for each metric
 		for ($i = 0; $i < $this->num; $i++) {
-			if (!array_key_exists($i, $this->data)) {
+			// Percentile lines are calculated for the graph period, not for the "Compare with" period.
+			if (!array_key_exists($i, $this->data) || array_key_exists('comparison', $this->items[$i])) {
 				continue;
 			}
 
@@ -1505,8 +1647,8 @@ class CLineGraphDraw extends CGraphDraw {
 		$legend->addRow($row);
 		$rowNum = $legend->getNumRows();
 
-		$i = ($this->type == GRAPH_TYPE_STACKED) ? $this->num - 1 : 0;
-		while ($i >= 0 && $i < $this->num) {
+		foreach ($this->getLegendOrder() as $i) {
+			$is_comparison = array_key_exists('comparison', $this->items[$i]);
 			$color = $this->getColor($this->items[$i]['color'], GRAPH_STACKED_ALFA);
 			switch ($this->items[$i]['calc_fnc']) {
 				case CALC_FNC_MIN:
@@ -1523,16 +1665,27 @@ class CLineGraphDraw extends CGraphDraw {
 					$fncRealName = _('avg');
 			}
 
-			// draw color square
+			// draw color square; for comparison copies a hollow square, to match their dashed lines
 			$colorSquare = imagecreatetruecolor(11, 11);
 			imagefill($colorSquare, 0, 0, $this->getColor($this->graphtheme['backgroundcolor'], 0));
-			imagefilledrectangle($colorSquare, 0, 0, 10, 10, $color);
+
+			if ($is_comparison) {
+				imagerectangle($colorSquare, 2, 2, 8, 8, $color);
+			}
+			else {
+				imagefilledrectangle($colorSquare, 0, 0, 10, 10, $color);
+			}
+
 			imagerectangle($colorSquare, 0, 0, 10, 10, $this->getColor('Black'));
 
 			// caption
 			$itemCaption = $this->itemsHost
 				? $this->items[$i]['name']
 				: $this->items[$i]['hostname'].NAME_DELIMITER.$this->items[$i]['name'];
+
+			if ($is_comparison) {
+				$itemCaption .= ' ('.$this->comparison['label'].')';
+			}
 
 			// draw legend of an item with data
 			$data = array_key_exists($i, $this->data)
@@ -1591,15 +1744,6 @@ class CLineGraphDraw extends CGraphDraw {
 			}
 
 			$rowNum++;
-
-			// legends for stacked graphs are written in reverse order so that the order of items
-			// matches the order of lines on the graphs
-			if ($this->type == GRAPH_TYPE_STACKED) {
-				$i--;
-			}
-			else {
-				$i++;
-			}
 		}
 
 		$legend->draw();
@@ -1730,7 +1874,8 @@ class CLineGraphDraw extends CGraphDraw {
 		return true;
 	}
 
-	protected function drawElement(&$data, $from, $to, $drawtype, $max_color, $avg_color, $min_color, $minmax_color, $calc_fnc, $yaxisside) {
+	protected function drawElement(&$data, $from, $to, $drawtype, $max_color, $avg_color, $min_color, $minmax_color,
+			$calc_fnc, $yaxisside, bool $keep_style = false) {
 		if (!isset($data['max'][$from]) || !isset($data['max'][$to])) {
 			return;
 		}
@@ -1890,7 +2035,9 @@ class CLineGraphDraw extends CGraphDraw {
 				break;
 
 			case GRAPH_ITEM_DRAWTYPE_DASHED_LINE:
-				imagesetstyle($this->im, [$avg_color, $avg_color, IMG_COLOR_TRANSPARENT, IMG_COLOR_TRANSPARENT]);
+				if (!$keep_style) {
+					imagesetstyle($this->im, [$avg_color, $avg_color, IMG_COLOR_TRANSPARENT, IMG_COLOR_TRANSPARENT]);
+				}
 				zbx_imageline($this->im, $x1, $y1, $x2, $y2, IMG_COLOR_STYLED);
 				break;
 
@@ -2085,6 +2232,31 @@ class CLineGraphDraw extends CGraphDraw {
 		}
 	}
 
+	/**
+	 * Draw "Compared with <period>" in the top left corner of the plot area, on a background box. Classic graphs have
+	 * no hint box, and the image header and legend can be hidden (e.g. in dashboard widgets), so this is where the
+	 * comparison period is always visible.
+	 */
+	private function drawComparisonLabel(): void {
+		if ($this->comparison === null) {
+			return;
+		}
+
+		$label = _s('Compared with %1$s', $this->comparison['label']);
+		$fontsize = 8;
+		$dims = imageTextSize($fontsize, 0, $label);
+
+		$x = $this->shiftXleft + 4;
+		$y = $this->shiftY + 4;
+
+		imagefilledrectangle($this->im, $x - 2, $y - 2, $x + $dims['width'] + 2, $y + $dims['height'] + 2,
+			$this->getColor($this->graphtheme['backgroundcolor'], 30)
+		);
+		imageText($this->im, $fontsize, 0, $x, $y + $dims['height'], $this->getColor($this->graphtheme['textcolor'], 0),
+			$label
+		);
+	}
+
 	public function getMinDimensions() {
 		$min_dimensions = [
 			'width' => self::GRAPH_WIDTH_MIN,
@@ -2110,6 +2282,7 @@ class CLineGraphDraw extends CGraphDraw {
 
 		$this->calculateTopPadding();
 		$this->selectTriggers();
+		$this->addComparisonItems();
 		$this->calcDimensions();
 
 		$this->im = imagecreatetruecolor(1, 1);
@@ -2131,6 +2304,7 @@ class CLineGraphDraw extends CGraphDraw {
 
 		CGraphHelper::calculateMetricsDelay($this->items);
 		$this->selectTriggers();
+		$this->addComparisonItems();
 		$this->calcDimensions();
 
 		$this->selectData();
@@ -2176,10 +2350,24 @@ class CLineGraphDraw extends CGraphDraw {
 
 			$calc_fnc = $this->items[$item]['calc_fnc'];
 
+			// The last point of a series is connected to the right edge; a shorter comparison period ends earlier.
+			$last_idx = $this->items[$item]['last_idx'] ?? $this->sizeX;
+
+			/*
+			 * Dashed comparison lines set the dash style once per series. Setting it for every segment (as for dashed
+			 * graph items) restarts the pattern at each 1px segment, which makes dense lines look solid.
+			 */
+			$keep_style = array_key_exists('comparison', $this->items[$item])
+				&& $drawtype == GRAPH_ITEM_DRAWTYPE_DASHED_LINE;
+
+			if ($keep_style) {
+				imagesetstyle($this->im, [$avg_color, $avg_color, IMG_COLOR_TRANSPARENT, IMG_COLOR_TRANSPARENT]);
+			}
+
 			// for each X
 			$prevDraw = true;
-			for ($i = 1, $j = 0; $i <= $this->sizeX; $i++) { // new point
-				if ($data['count'][$i] == 0 && $i != $this->sizeX) {
+			for ($i = 1, $j = 0; $i <= $last_idx; $i++) { // new point
+				if ($data['count'][$i] == 0 && $i != $last_idx) {
 					continue;
 				}
 
@@ -2226,13 +2414,16 @@ class CLineGraphDraw extends CGraphDraw {
 						$min_color,
 						$minmax_color,
 						$calc_fnc,
-						$this->items[$item]['yaxisside']
+						$this->items[$item]['yaxisside'],
+						$keep_style
 					);
 				}
 
 				$j = $i;
 			}
 		}
+
+		$this->drawComparisonLabel();
 
 		if ($this->drawLegend) {
 			$this->drawTriggers();

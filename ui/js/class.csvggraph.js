@@ -620,10 +620,19 @@
 				html = jQuery('<ul>');
 			}
 			var rows_added = 0;
+
+			// Time offset of the mouse position from the start of the graph period.
+			const offset = (offsetX - data.dimX) * data.spp;
+
 			points.forEach(function(point) {
 				var point_highlight = point.g.querySelectorAll('.svg-point-highlight')[0];
 
-				if (point.v !== null && (xy_point === false || xy_point === point)) {
+				// A "Compare with" series ends early, if its period is shorter than the graph period.
+				const is_comparison = point.g.hasAttribute('data-comparison');
+				const is_past_end = is_comparison
+					&& offset > Number(point.g.getAttribute('data-comparison-length'));
+
+				if (point.v !== null && !is_past_end && (xy_point === false || xy_point === point)) {
 					point_highlight.setAttribute('cx', point.x);
 					point_highlight.setAttribute('cy', point.y);
 
@@ -632,8 +641,19 @@
 					}
 
 					if (show_hint && data.hintMaxRows > rows_added) {
+						let text = point.g.getAttribute('data-metric') + ': ' + point.v;
+
+						// Show the real time of a comparison value; the header shows the time of the graph period.
+						if (is_comparison) {
+							const comparison_time = new CDate(
+								(data.timePeriod.from_ts + offset + Number(point.g.getAttribute('data-time-shift'))) * 1000
+							);
+
+							text += ' (' + comparison_time.format(PHP_ZBX_FULL_DATE_TIME) + ')';
+						}
+
 						jQuery('<li>')
-							.text(point.g.getAttribute('data-metric') + ': ' + point.v)
+							.text(text)
 							.append(
 								jQuery('<span>')
 									.css('background-color', point.g.getAttribute('data-color'))
@@ -651,7 +671,7 @@
 
 			if (show_hint) {
 				// Calculate time at mouse position.
-				const time = new CDate((data.timePeriod.from_ts + (offsetX - data.dimX) * data.spp) * 1000);
+				const time = new CDate((data.timePeriod.from_ts + offset) * 1000);
 
 				html = jQuery('<div>')
 					.addClass('svg-graph-hintbox')

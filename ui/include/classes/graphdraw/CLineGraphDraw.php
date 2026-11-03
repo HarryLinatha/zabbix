@@ -1680,13 +1680,18 @@ class CLineGraphDraw extends CGraphDraw {
 
 			imagerectangle($colorSquare, 0, 0, 10, 10, $this->getColor('Black'));
 
-			// caption
-			$itemCaption = $this->itemsHost
-				? $this->items[$i]['name']
-				: $this->items[$i]['hostname'].NAME_DELIMITER.$this->items[$i]['name'];
-
+			/*
+			 * Caption. A comparison row follows the row of its item and has the same color, so it shows only the
+			 * comparison period: repeating the item name would make the caption column, which is as wide as its
+			 * widest cell, push the value columns of all rows off narrow graphs.
+			 */
 			if ($is_comparison) {
-				$itemCaption .= ' ('.$this->comparison['label'].')';
+				$itemCaption = $this->comparison['label'];
+			}
+			else {
+				$itemCaption = $this->itemsHost
+					? $this->items[$i]['name']
+					: $this->items[$i]['hostname'].NAME_DELIMITER.$this->items[$i]['name'];
 			}
 
 			// draw legend of an item with data

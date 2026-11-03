@@ -137,6 +137,18 @@
 		});
 	}
 
+	// Close frozen hints of the graphs linked to the given graph (not of the graph itself).
+	function closeLinkedFrozenHints(graph) {
+		for (const linked_graph of getLinkedGraphs(graph)) {
+			const data = linked_graph.data('options');
+
+			if (linked_graph[0] !== graph[0] && linked_graph.hintBoxItem && data !== undefined
+					&& (data.isHintBoxFrozen || data.isTriggerHintBoxFrozen)) {
+				hintBox.deleteHint(linked_graph, false);
+			}
+		}
+	}
+
 	// Check if a time period is being selected (SBox) in the graph or in a graph linked to it.
 	function isLinkedBoxing(graph) {
 		return getLinkedGraphs(graph).some((linked_graph) => {
@@ -167,14 +179,7 @@
 		}
 
 		// One frozen hint per widget: a frozen hint of a linked graph is closed first.
-		for (const linked_graph of getLinkedGraphs(graph)) {
-			const linked_data = linked_graph.data('options');
-
-			if (linked_graph[0] !== graph[0] && linked_graph.hintBoxItem
-					&& (linked_data.isHintBoxFrozen || linked_data.isTriggerHintBoxFrozen)) {
-				hintBox.deleteHint(linked_graph, false);
-			}
-		}
+		closeLinkedFrozenHints(graph);
 
 		// Destroy old hintbox to make new one with close button.
 		destroyHintbox(graph);
@@ -273,6 +278,8 @@
 
 		// If mouse movement detected (SBox has dragged), destroy opened hintbox and pause widget refresh.
 		if (data.start != data.end && !data.boxing) {
+			// Frozen hints of linked graphs are closed too (before pausing, as closing them may resume refresh).
+			closeLinkedFrozenHints(graph);
 			graph.data('widget')._pauseUpdating();
 			data.isHintBoxFrozen = false;
 			data.isTriggerHintBoxFrozen = false;
@@ -885,6 +892,7 @@
 			if (data.sbox) {
 				graph
 					.on('dblclick', function() {
+						closeLinkedFrozenHints(graph);
 						hintBox.hideHint(graph, true);
 
 						const widget = graph.data('widget');

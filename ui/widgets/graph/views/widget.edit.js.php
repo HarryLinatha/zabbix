@@ -62,7 +62,7 @@ window.widget_graph_form = new class {
 
 		document.getElementById('compare_shift').disabled = !is_compare_shift;
 
-		for (const element of document.getElementById('compare_date').closest('.date-selector')
+		for (const element of document.getElementById('compare_date').closest('.<?= CDateSelector::ZBX_STYLE_CLASS ?>')
 				.querySelectorAll('input, button')) {
 			element.disabled = !is_compare_date;
 		}

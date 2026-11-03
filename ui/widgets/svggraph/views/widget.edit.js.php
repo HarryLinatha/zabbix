@@ -933,7 +933,7 @@ window.widget_svggraph_form = new class {
 		compare_shift.classList.toggle(ZBX_STYLE_DISPLAY_NONE, !is_compare_shift);
 		compare_shift.disabled = !is_compare_shift;
 
-		const compare_date = document.getElementById('compare_date').closest('.date-selector');
+		const compare_date = document.getElementById('compare_date').closest('.<?= CDateSelector::ZBX_STYLE_CLASS ?>');
 		compare_date.classList.toggle(ZBX_STYLE_DISPLAY_NONE, !is_compare_date);
 
 		for (const element of compare_date.querySelectorAll('input, button')) {

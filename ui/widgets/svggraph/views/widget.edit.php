@@ -149,6 +149,32 @@ function getTimePeriodTab(CWidgetFormView $form, array $fields): CFormGrid {
 		]);
 	}
 
+	// "Compare with": only the input of the selected custom mode is shown; widget.edit.js.php toggles them.
+	$compare_with = $form->registerField(new CWidgetFieldSelectView($fields['compare_with']));
+	$compare_shift = $form->registerField(
+		(new CWidgetFieldTextBoxView($fields['compare_shift']))
+			->setPlaceholder(_('e.g. -76d, -1M'))
+			->setWidth(ZBX_TEXTAREA_SMALL_WIDTH)
+	);
+	$compare_date = $form->registerField(
+		(new CWidgetFieldDatePickerView($fields['compare_date']))
+			->setDateFormat(ZBX_FULL_DATE_TIME)
+			->setPlaceholder(_('YYYY-MM-DD hh:mm:ss'))
+	);
+
+	$compare_with_value = $fields['compare_with']->getValue();
+
+	$form_grid->addItem([
+		$compare_with->getLabel(),
+		(new CFormField([
+			$compare_with->getView(),
+			$compare_shift->getView()
+				->addClass($compare_with_value == GRAPH_COMPARE_CUSTOM_SHIFT ? null : ZBX_STYLE_DISPLAY_NONE),
+			$compare_date->getView()
+				->addClass($compare_with_value == GRAPH_COMPARE_CUSTOM_DATE ? null : ZBX_STYLE_DISPLAY_NONE)
+		]))->addClass(ZBX_STYLE_FORM_FIELDS_INLINE)
+	]);
+
 	return $form_grid;
 }
 

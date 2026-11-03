@@ -299,7 +299,8 @@ class CLineGraphDraw extends CGraphDraw {
 			$results
 		);
 
-		foreach ($items as $item) {
+		// Series data is indexed like $this->items, so that the same item can be drawn more than once.
+		foreach ($items as $i => $item) {
 			$data = [
 				'count' => [],
 				'min' => [],
@@ -389,7 +390,7 @@ class CLineGraphDraw extends CGraphDraw {
 				}
 			}
 
-			$this->data[$item['itemid']] = $data;
+			$this->data[$i] = $data;
 		}
 
 		// calculate shift for stacked graphs
@@ -397,11 +398,11 @@ class CLineGraphDraw extends CGraphDraw {
 			for ($i = 1; $i < $this->num; $i++) {
 				$item1 = $this->items[$i];
 
-				if (!array_key_exists($item1['itemid'], $this->data)) {
+				if (!array_key_exists($i, $this->data)) {
 					continue;
 				}
 
-				$curr_data = &$this->data[$item1['itemid']];
+				$curr_data = &$this->data[$i];
 
 				for ($j = $i - 1; $j >= 0; $j--) {
 					$item2 = $this->items[$j];
@@ -410,11 +411,11 @@ class CLineGraphDraw extends CGraphDraw {
 						continue;
 					}
 
-					if (!array_key_exists($item2['itemid'], $this->data)) {
+					if (!array_key_exists($j, $this->data)) {
 						continue;
 					}
 
-					$prev_data = &$this->data[$item2['itemid']];
+					$prev_data = &$this->data[$j];
 
 					for ($ci = 0; $ci <= $this->sizeX; $ci++) {
 						foreach (['min', 'max', 'avg'] as $var_name) {
@@ -587,11 +588,11 @@ class CLineGraphDraw extends CGraphDraw {
 
 		// for each metric
 		for ($i = 0; $i < $this->num; $i++) {
-			if (!array_key_exists($this->items[$i]['itemid'], $this->data)) {
+			if (!array_key_exists($i, $this->data)) {
 				continue;
 			}
 
-			$data = &$this->data[$this->items[$i]['itemid']];
+			$data = &$this->data[$i];
 
 			// for each X
 			for ($j = 0; $j < $maxX; $j++) { // new point
@@ -662,11 +663,11 @@ class CLineGraphDraw extends CGraphDraw {
 				continue;
 			}
 
-			if (!array_key_exists($this->items[$i]['itemid'], $this->data)) {
+			if (!array_key_exists($i, $this->data)) {
 				continue;
 			}
 
-			$data = &$this->data[$this->items[$i]['itemid']];
+			$data = &$this->data[$i];
 
 			$calc_fnc = $this->items[$i]['calc_fnc'];
 
@@ -741,11 +742,11 @@ class CLineGraphDraw extends CGraphDraw {
 				continue;
 			}
 
-			if (!array_key_exists($this->items[$i]['itemid'], $this->data)) {
+			if (!array_key_exists($i, $this->data)) {
 				continue;
 			}
 
-			$data = &$this->data[$this->items[$i]['itemid']];
+			$data = &$this->data[$i];
 
 			$calc_fnc = $this->items[$i]['calc_fnc'];
 
@@ -1534,8 +1535,8 @@ class CLineGraphDraw extends CGraphDraw {
 				: $this->items[$i]['hostname'].NAME_DELIMITER.$this->items[$i]['name'];
 
 			// draw legend of an item with data
-			$data = array_key_exists($this->items[$i]['itemid'], $this->data)
-				? $this->data[$this->items[$i]['itemid']]
+			$data = array_key_exists($i, $this->data)
+				? $this->data[$i]
 				: null;
 
 			if ($data && $data['min']) {
@@ -2161,11 +2162,11 @@ class CLineGraphDraw extends CGraphDraw {
 
 		// for each metric
 		for ($item = 0; $item < $this->num; $item++) {
-			if (!array_key_exists($this->items[$item]['itemid'], $this->data)) {
+			if (!array_key_exists($item, $this->data)) {
 				continue;
 			}
 
-			$data = &$this->data[$this->items[$item]['itemid']];
+			$data = &$this->data[$item];
 
 			$drawtype = $this->items[$item]['drawtype'];
 			$max_color = $this->getColor('ValueMax', GRAPH_STACKED_ALFA);

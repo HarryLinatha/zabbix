@@ -42,6 +42,21 @@ if (!$data['fields']['itemid']->isTemplateDashboard()) {
 			->setToPlaceholder(_('YYYY-MM-DD hh:mm:ss'))
 	)
 	->addField(
+		new CWidgetFieldSelectView($data['fields']['compare_with'])
+	)
+	->addField(
+		(new CWidgetFieldTextBoxView($data['fields']['compare_shift']))
+			->setPlaceholder(_('e.g. -76d, -1M'))
+			->setWidth(ZBX_TEXTAREA_SMALL_WIDTH)
+			->addRowClass('js-row-compare-shift')
+	)
+	->addField(
+		(new CWidgetFieldDatePickerView($data['fields']['compare_date']))
+			->setDateFormat(ZBX_FULL_DATE_TIME)
+			->setPlaceholder(_('YYYY-MM-DD hh:mm:ss'))
+			->addRowClass('js-row-compare-date')
+	)
+	->addField(
 		new CWidgetFieldCheckBoxView($data['fields']['show_legend'])
 	)
 	->addField($data['templateid'] === null

@@ -27,6 +27,7 @@ window.widget_form = new class extends CWidgetForm {
 		this.#form = this.getForm();
 
 		document.getElementById('source_type').addEventListener('change', () => this.#updateForm());
+		document.getElementById('compare_with').addEventListener('change', () => this.#updateForm());
 
 		this.#updateForm();
 		this.ready();
@@ -46,5 +47,25 @@ window.widget_form = new class extends CWidgetForm {
 
 		$('#graphid').multiSelect(is_graph ? 'enable' : 'disable');
 		$('#itemid').multiSelect(is_graph ? 'disable' : 'enable');
+
+		// "Compare with": only the input of the selected custom mode is shown and submitted.
+		const compare_with = document.getElementById('compare_with').value;
+		const is_compare_shift = compare_with == <?= GRAPH_COMPARE_CUSTOM_SHIFT ?>;
+		const is_compare_date = compare_with == <?= GRAPH_COMPARE_CUSTOM_DATE ?>;
+
+		this.#form.querySelectorAll('.js-row-compare-shift').forEach(element => {
+			element.style.display = is_compare_shift ? '' : 'none';
+		});
+
+		this.#form.querySelectorAll('.js-row-compare-date').forEach(element => {
+			element.style.display = is_compare_date ? '' : 'none';
+		});
+
+		document.getElementById('compare_shift').disabled = !is_compare_shift;
+
+		for (const element of document.getElementById('compare_date').closest('.date-selector')
+				.querySelectorAll('input, button')) {
+			element.disabled = !is_compare_date;
+		}
 	}
 };

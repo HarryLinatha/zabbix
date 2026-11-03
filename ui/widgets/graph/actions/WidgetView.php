@@ -314,6 +314,17 @@ class WidgetView extends CControllerDashboardWidgetView {
 
 			if ($graph_dims['graphtype'] != GRAPH_TYPE_PIE && $graph_dims['graphtype'] != GRAPH_TYPE_EXPLODED) {
 				$graph_src->setArgument('outer', '1');
+
+				// "Compare with" is drawn by line graphs only (chart.php, chart2.php, chart3.php).
+				if ($this->fields_values['compare_with'] != GRAPH_COMPARE_NONE) {
+					$graph_src
+						->setArgument('compare', $this->fields_values['compare_with'])
+						->setArgument('compare_value', match ((int) $this->fields_values['compare_with']) {
+							GRAPH_COMPARE_CUSTOM_SHIFT => $this->fields_values['compare_shift'],
+							GRAPH_COMPARE_CUSTOM_DATE => $this->fields_values['compare_date'],
+							default => ''
+						});
+				}
 			}
 
 			$graph_src->setArgument('widget_view', '1');

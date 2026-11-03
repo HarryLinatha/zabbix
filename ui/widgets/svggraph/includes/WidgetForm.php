@@ -62,6 +62,10 @@ class WidgetForm extends CWidgetForm {
 	public const PERCENTILE_MIN = 1;
 	public const PERCENTILE_MAX = 100;
 
+	// "Compare with" layout: comparison series in the same graph, or in a second graph below with the same axes.
+	public const COMPARE_LAYOUT_OVERLAY = 0;
+	public const COMPARE_LAYOUT_SEPARATE = 1;
+
 	private bool $percentile_left_on = false;
 	private bool $percentile_right_on = false;
 
@@ -235,6 +239,10 @@ class WidgetForm extends CWidgetForm {
 			unset($values['compare_date']);
 		}
 
+		if ($this->compare_with == GRAPH_COMPARE_NONE) {
+			unset($values['compare_layout']);
+		}
+
 		if (array_key_exists('legend', $values)) {
 			$this->legend_on = $values['legend'] == self::LEGEND_ON;
 		}
@@ -331,6 +339,14 @@ class WidgetForm extends CWidgetForm {
 			->addField(
 				(new CWidgetFieldDatePicker('compare_date', _('Custom start date')))
 					->setFlags($this->compare_with != GRAPH_COMPARE_CUSTOM_DATE ? CWidgetField::FLAG_DISABLED : 0x00)
+			)
+			->addField(
+				(new CWidgetFieldRadioButtonList('compare_layout', _('Comparison layout'), [
+					self::COMPARE_LAYOUT_OVERLAY => _('Overlay'),
+					self::COMPARE_LAYOUT_SEPARATE => _('Separate graphs')
+				]))
+					->setDefault(self::COMPARE_LAYOUT_OVERLAY)
+					->setFlags($this->compare_with == GRAPH_COMPARE_NONE ? CWidgetField::FLAG_DISABLED : 0x00)
 			);
 	}
 

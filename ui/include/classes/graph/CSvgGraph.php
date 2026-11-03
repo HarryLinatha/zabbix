@@ -17,6 +17,12 @@
 class CSvgGraph extends CSvg {
 
 	public const SVG_GRAPH_X_AXIS_HEIGHT = 20;
+
+	// Space below the canvas for the X axis line (with its arrow) when time labels are hidden.
+	public const SVG_GRAPH_X_AXIS_LINE_HEIGHT = 5;
+
+	// Space above the canvas.
+	private const SVG_GRAPH_CANVAS_OFFSET_TOP = 10;
 	public const SVG_GRAPH_DEFAULT_COLOR = '#b0af07';
 	public const SVG_GRAPH_DEFAULT_TRANSPARENCY = 5;
 	public const SVG_GRAPH_DEFAULT_POINTSIZE = 1;
@@ -122,6 +128,28 @@ class CSvgGraph extends CSvg {
 	private $max_value_right;
 	private $min_value_left;
 	private $min_value_right;
+
+	/**
+	 * Whether points and the value range are calculated (see self::prepare()).
+	 *
+	 * @var bool
+	 */
+	private $prepared = false;
+
+	/**
+	 * Distance in seconds of the first time grid line from the start of the period; null to align the grid to time
+	 * itself (see self::setTimeGridOffset()).
+	 *
+	 * @var int|null
+	 */
+	private $time_grid_offset = null;
+
+	/**
+	 * Whether time labels are shown below the X axis (see self::hideTimeLabels()).
+	 *
+	 * @var bool
+	 */
+	private $show_time_labels = true;
 
 	/**
 	 * Value for graph left offset. Is used as width for left Y axis container.
@@ -280,12 +308,97 @@ class CSvgGraph extends CSvg {
 	/**
 	 * @throws Exception
 	 */
-	public function draw(): self {
-		$this->applyMissingDataFunc();
-		$this->recalculatePoints();
-		$this->calculateStackedPoints();
-		$this->calculateBarPoints();
+	/**
+	 * Calculate the points and the value range of the metrics. Done by draw(); called separately to share the value
+	 * range with another graph (self::getValueRange(), self::extendValueRange()) before drawing.
+	 */
+	public function prepare(): self {
+		if (!$this->prepared) {
+			$this->applyMissingDataFunc();
+			$this->recalculatePoints();
+			$this->calculateStackedPoints();
+			$this->calculateBarPoints();
+			$this->calculateValueRange();
 
+			$this->prepared = true;
+		}
+
+		return $this;
+	}
+
+	/**
+	 * Get the value range of the metrics per Y axis side; null values if the side has no data. Requires prepare().
+	 */
+	public function getValueRange(): array {
+		return [
+			GRAPH_YAXIS_SIDE_LEFT => ['min' => $this->min_value_left, 'max' => $this->max_value_left],
+			GRAPH_YAXIS_SIDE_RIGHT => ['min' => $this->min_value_right, 'max' => $this->max_value_right]
+		];
+	}
+
+	/**
+	 * Extend the value range by the range of another graph (from its getValueRange()), so that both graphs get the
+	 * same Y axes. Requires prepare(); the Y axis minimum and maximum set in the options still take precedence.
+	 */
+	public function extendValueRange(array $range): self {
+		foreach ([GRAPH_YAXIS_SIDE_LEFT => 'left', GRAPH_YAXIS_SIDE_RIGHT => 'right'] as $side => $name) {
+			$min = $range[$side]['min'];
+			$max = $range[$side]['max'];
+
+			if ($min !== null && ($this->{'min_value_'.$name} === null || $this->{'min_value_'.$name} > $min)) {
+				$this->{'min_value_'.$name} = $min;
+			}
+			if ($max !== null && ($this->{'max_value_'.$name} === null || $this->{'max_value_'.$name} < $max)) {
+				$this->{'max_value_'.$name} = $max;
+			}
+		}
+
+		return $this;
+	}
+
+	/**
+	 * Get the distance in seconds of the first time grid line from the start of the period. Requires draw().
+	 */
+	public function getTimeGridOffset(): ?int {
+		if ($this->canvas_width <= 0) {
+			return null;
+		}
+
+		$step = $this->getTimeGridStep();
+
+		return $step == 0 ? null : (int) ($this->getTimeGridStart($step) - $this->time_from);
+	}
+
+	/**
+	 * Place the time grid lines at the given distance from the start of the period, instead of aligning them to time
+	 * itself; used to give a graph of another period of the same length the same grid as a graph drawn before.
+	 */
+	public function setTimeGridOffset(?int $offset): self {
+		$this->time_grid_offset = $offset;
+
+		return $this;
+	}
+
+	/**
+	 * Draw the X axis and time grid without time labels, e.g. for a graph above another graph that shows the same time
+	 * grid with labels. The space for the labels is not reserved.
+	 */
+	public function hideTimeLabels(): self {
+		$this->show_time_labels = false;
+
+		return $this;
+	}
+
+	/**
+	 * Get the graph height needed for the given canvas height.
+	 */
+	public static function getHeightForCanvas(int $canvas_height, bool $show_time_labels = true): int {
+		return $canvas_height + self::SVG_GRAPH_CANVAS_OFFSET_TOP
+			+ ($show_time_labels ? self::SVG_GRAPH_X_AXIS_HEIGHT : self::SVG_GRAPH_X_AXIS_LINE_HEIGHT);
+	}
+
+	public function draw(): self {
+		$this->prepare();
 		$this->calculateDimensions();
 
 		if ($this->canvas_width > 0 && $this->canvas_height > 0) {
@@ -612,9 +725,9 @@ class CSvgGraph extends CSvg {
 	}
 
 	/**
-	 * Calculate minimal and maximum values, canvas size, margins and offsets for graph canvas inside SVG element.
+	 * Calculate minimal and maximum values of the metrics for each Y axis side.
 	 */
-	private function calculateDimensions(): void {
+	private function calculateValueRange(): void {
 		foreach ($this->metrics as $index => $metric) {
 			if ($metric['options']['stacked'] == SVG_GRAPH_STACKED_ON) {
 				if (!in_array($metric['options']['type'], [SVG_GRAPH_TYPE_LINE, SVG_GRAPH_TYPE_STAIRCASE])
@@ -728,11 +841,16 @@ class CSvgGraph extends CSvg {
 				}
 			}
 		}
+	}
 
+	/**
+	 * Calculate canvas size, margins and offsets for graph canvas inside SVG element.
+	 */
+	private function calculateDimensions(): void {
 		// Canvas height must be specified before call self::getValuesGridWithPosition.
 
-		$offset_top = 10;
-		$offset_bottom = self::SVG_GRAPH_X_AXIS_HEIGHT;
+		$offset_top = self::SVG_GRAPH_CANVAS_OFFSET_TOP;
+		$offset_bottom = $this->show_time_labels ? self::SVG_GRAPH_X_AXIS_HEIGHT : self::SVG_GRAPH_X_AXIS_LINE_HEIGHT;
 		$this->canvas_height = max(0, $this->height - $offset_top - $offset_bottom);
 		$this->canvas_y = $offset_top;
 
@@ -1232,8 +1350,14 @@ class CSvgGraph extends CSvg {
 			return;
 		}
 
+		$time_points = $this->getTimeGridWithPosition();
+
+		if (!$this->show_time_labels) {
+			$time_points = array_fill_keys(array_keys($time_points), '');
+		}
+
 		$this->addItem(
-			(new CSvgGraphAxis($this->getTimeGridWithPosition(), GRAPH_YAXIS_SIDE_BOTTOM))
+			(new CSvgGraphAxis($time_points, GRAPH_YAXIS_SIDE_BOTTOM))
 				->setPosition($this->canvas_x, $this->canvas_y + $this->canvas_height)
 				->setSize($this->canvas_width, $this->xaxis_height)
 				->setLineColor('#'.$this->graph_theme['gridcolor'])
@@ -1732,9 +1856,25 @@ class CSvgGraph extends CSvg {
 	 * @throws Exception
 	 * @return array
 	 */
+	/**
+	 * Grid cell (100px) in seconds.
+	 */
+	private function getTimeGridStep(): float {
+		return round(($this->time_till - $this->time_from) / $this->canvas_width * 100);
+	}
+
+	/**
+	 * Time of the first time grid line: aligned to time itself (a multiple of the step), or at the set offset.
+	 */
+	private function getTimeGridStart(float $step): float {
+		return $this->time_grid_offset !== null
+			? $this->time_from + $this->time_grid_offset
+			: $this->time_from + $step - $this->time_from % $step;
+	}
+
 	private function getTimeGridWithPosition(): array {
 		$period = $this->time_till - $this->time_from;
-		$step = round($period / $this->canvas_width * 100); // Grid cell (100px) in seconds.
+		$step = $this->getTimeGridStep();
 
 		/*
 		 * In case if requested time period is so small that it is rounded to zero, we are displaying only two
@@ -1747,7 +1887,7 @@ class CSvgGraph extends CSvg {
 			];
 		}
 
-		$start = $this->time_from + $step - $this->time_from % $step;
+		$start = $this->getTimeGridStart($step);
 		$time_formats = [
 			SVG_GRAPH_DATE_FORMAT,
 			SVG_GRAPH_DATE_FORMAT_SHORT,

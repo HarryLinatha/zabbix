@@ -133,21 +133,30 @@ class CWidgetSvgGraph extends CWidget {
 
 	_initGraph(options) {
 		this._svg_options = options;
-		this._svg = this._body.querySelector('svg');
-		jQuery(this._svg).svggraph(this);
+
+		// The first graph is the main one; "Compare with" in separate graphs adds a graph for the comparison period,
+		// with own dimensions and time period (options.panels).
+		this._svgs = [...this._body.querySelectorAll('svg.svg-graph')];
+		this._svg = this._svgs[0];
+
+		const {panels = [], ...main_options} = options;
+
+		this._svgs.forEach((svg, index) => {
+			jQuery(svg).svggraph(this, index == 0 ? main_options : {...main_options, ...panels[index - 1]});
+		});
 
 		this._activateGraph();
 	}
 
 	_activateGraph() {
 		if (this._has_contents) {
-			jQuery(this._svg).svggraph('activate');
+			this._svgs.forEach((svg) => jQuery(svg).svggraph('activate'));
 		}
 	}
 
 	_deactivateGraph() {
 		if (this._has_contents) {
-			jQuery(this._svg).svggraph('deactivate');
+			this._svgs.forEach((svg) => jQuery(svg).svggraph('deactivate'));
 		}
 	}
 

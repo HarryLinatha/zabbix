@@ -660,8 +660,11 @@
 					if (show_hint && data.hintMaxRows > rows_added) {
 						let text = point.g.getAttribute('data-metric') + ': ' + point.v;
 
-						// Show the real time of a comparison value; the header shows the time of the graph period.
-						if (is_comparison) {
+						/*
+						 * Show the real time of a comparison value; the header shows the time of the graph period
+						 * (except in the comparison graph of separate graphs, where the header already shows it).
+						 */
+						if (is_comparison && !data.isComparisonPanel) {
 							const comparison_time = new CDate(
 								(data.timePeriod.from_ts + offset + Number(point.g.getAttribute('data-time-shift'))) * 1000
 							);
@@ -748,36 +751,43 @@
 	}
 
 	var methods = {
-		init: function(widget) {
+		/**
+		 * @param {Object} widget
+		 * @param {Object} svg_options  Options of this graph; by default those of the widget. A widget can show more
+		 *                              than one graph ("Compare with" in separate graphs), each with own options.
+		 */
+		init: function(widget, svg_options = widget._svg_options) {
 			this.each(function() {
-				jQuery(widget._svg)
+				jQuery(this)
 					.data('options', {
-						dimX: widget._svg_options.dims.x,
-						dimY: widget._svg_options.dims.y,
-						dimW: widget._svg_options.dims.w,
-						dimH: widget._svg_options.dims.h,
-						showProblems: widget._svg_options.show_problems,
-						showSimpleTriggers: widget._svg_options.show_simple_triggers,
-						hintMaxRows: widget._svg_options.hint_max_rows,
+						dimX: svg_options.dims.x,
+						dimY: svg_options.dims.y,
+						dimW: svg_options.dims.w,
+						dimH: svg_options.dims.h,
+						showProblems: svg_options.show_problems,
+						showSimpleTriggers: svg_options.show_simple_triggers,
+						hintMaxRows: svg_options.hint_max_rows,
 						isHintBoxFrozen: false,
 						isTriggerHintBoxFrozen: false,
-						spp: widget._svg_options.spp || null,
-						timePeriod: widget._svg_options.time_period,
-						minPeriod: widget._svg_options.min_period,
+						spp: svg_options.spp || null,
+						timePeriod: svg_options.time_period,
+						minPeriod: svg_options.min_period,
+						sbox: svg_options.sbox,
+						isComparisonPanel: svg_options.comparison_panel === true,
 						boxing: false
 					})
 					.data('widget', widget)
 					.attr('unselectable', 'on')
 					.css('user-select', 'none');
 
-				if (widget._svg_options.sbox) {
-					dropDocumentListeners(null, jQuery(widget._svg));
+				if (svg_options.sbox) {
+					dropDocumentListeners(null, jQuery(this));
 				}
 			});
 		},
 		activate: function () {
 			const widget = jQuery(this).data('widget');
-			const graph = jQuery(widget._svg);
+			const graph = jQuery(this);
 			const data = graph.data('options');
 
 			graph
@@ -791,7 +801,7 @@
 				})
 				.on('selectstart', false);
 
-			if (widget._svg_options.sbox) {
+			if (data.sbox) {
 				graph
 					.on('dblclick', function() {
 						hintBox.hideHint(graph, true);
@@ -821,8 +831,7 @@
 			}
 		},
 		deactivate: function (e) {
-			const widget = jQuery(this).data('widget');
-			const graph = jQuery(widget._svg);
+			const graph = jQuery(this);
 
 			destroySBox(e, graph);
 			graph.off('mousemove mouseleave dblclick mousedown selectstart');

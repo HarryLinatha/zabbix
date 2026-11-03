@@ -940,6 +940,10 @@ window.widget_svggraph_form = new class {
 			element.disabled = !is_compare_date;
 		}
 
+		for (const element of document.querySelectorAll('[name="compare_layout"]')) {
+			element.disabled = compare_with == <?= GRAPH_COMPARE_NONE ?>;
+		}
+
 		// Trigger event to update tab indicators.
 		document.getElementById('tabs').dispatchEvent(new Event(TAB_INDICATOR_UPDATE_EVENT));
 	}

@@ -144,6 +144,8 @@ class WidgetView extends CControllerDashboardWidgetView {
 			}
 		);
 
+		$graph_data['comparison_layout'] = (int) $this->fields_values['compare_layout'];
+
 		$svg_options = CSvgGraphHelper::get($graph_data, $width, $height);
 		if ($svg_options['errors']) {
 			error($svg_options['errors']);
@@ -157,6 +159,14 @@ class WidgetView extends CControllerDashboardWidgetView {
 				'time_period' => $this->fields_values['time_period'],
 				'hint_max_rows' => ZBX_WIDGET_ROWS
 			]);
+
+			// The comparison graph of the "Separate graphs" layout cannot zoom (its period follows the main graph).
+			if (array_key_exists('panels', $svg_options['data'])) {
+				foreach ($svg_options['data']['panels'] as &$panel) {
+					$panel['sbox'] = false;
+				}
+				unset($panel);
+			}
 		}
 
 		$this->setResponse(new CControllerResponseData([

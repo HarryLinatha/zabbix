@@ -175,6 +175,13 @@ function getTimePeriodTab(CWidgetFormView $form, array $fields): CFormGrid {
 		]))->addClass(ZBX_STYLE_FORM_FIELDS_INLINE)
 	]);
 
+	$compare_layout = $form->registerField(new CWidgetFieldRadioButtonListView($fields['compare_layout']));
+
+	$form_grid->addItem([
+		$compare_layout->getLabel(),
+		new CFormField($compare_layout->getView())
+	]);
+
 	return $form_grid;
 }
 

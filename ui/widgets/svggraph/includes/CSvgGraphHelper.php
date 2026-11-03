@@ -99,6 +99,13 @@ class CSvgGraphHelper {
 
 		$svg_height = max(0, $height - ($legend !== null ? $legend->getHeight() : 0));
 
+		if ($options['comparison'] !== null
+				&& ($options['comparison_layout'] ?? WidgetForm::COMPARE_LAYOUT_OVERLAY)
+					== WidgetForm::COMPARE_LAYOUT_SEPARATE
+				&& array_filter($metrics, [self::class, 'isComparison'])) {
+			return self::getSeparateGraphs($metrics, $options, $width, $svg_height, $legend, $errors);
+		}
+
 		$graph = (new CSvgGraph([
 			'displaying' => $options['displaying'],
 			'time_period' => $options['time_period'],
@@ -133,6 +140,132 @@ class CSvgGraphHelper {
 					? 0
 					: ($options['time_period']['time_to'] - $options['time_period']['time_from'])
 						/ $graph->getCanvasWidth()
+			],
+			'errors' => $errors
+		];
+	}
+
+	/**
+	 * "Compare with" in the "Separate graphs" layout: the main metrics are drawn in a graph of the main period, and
+	 * their comparison copies in a second graph below it, of the comparison period with the same length. Both graphs
+	 * get the same size and Y axes (the value range of both), so that their canvases match: the same horizontal
+	 * position is the same time from the start of each period, and the same vertical position the same value.
+	 *
+	 * Data is already loaded for the comparison copies as in the overlay layout (their time shift includes the
+	 * comparison shift); for drawing, the comparison shift is taken out again, because the second graph itself shows
+	 * the comparison period. Simple triggers (thresholds) are shown in both graphs; problems are those of each period.
+	 *
+	 * @param array      $metrics     Main metrics and comparison copies, with data.
+	 * @param array      $options     Graph options, as for self::get().
+	 * @param int        $width
+	 * @param int        $height      Height of both graphs together (without the legend).
+	 * @param CTag|null  $legend
+	 * @param array      $errors
+	 *
+	 * @return array  Same structure as self::get(); data of the comparison graph is in $result['data']['panels'][0].
+	 */
+	private static function getSeparateGraphs(array $metrics, array $options, int $width, int $height, $legend,
+			array $errors): array {
+		$main_metrics = [];
+		$comparison_metrics = [];
+
+		foreach ($metrics as $metric) {
+			if (self::isComparison($metric)) {
+				$metric['options']['timeshift'] -= $options['comparison']['shift'];
+				$comparison_metrics[] = $metric;
+			}
+			else {
+				$main_metrics[] = $metric;
+			}
+		}
+
+		$period_length = $options['time_period']['time_to'] - $options['time_period']['time_from'];
+		$comparison_time_period = [
+			'time_from' => $options['comparison']['from_ts'],
+			'time_to' => $options['comparison']['from_ts'] + $period_length
+		];
+
+		/*
+		 * Time labels are shown only below the comparison graph; both canvases get the same height, so that the same
+		 * vertical position means the same value.
+		 */
+		$canvas_height = (int) max(0, floor(($height - CSvgGraph::getHeightForCanvas(0, false)
+			- CSvgGraph::getHeightForCanvas(0)) / 2
+		));
+		$main_height = CSvgGraph::getHeightForCanvas($canvas_height, false);
+		$comparison_height = CSvgGraph::getHeightForCanvas($canvas_height);
+
+		$simple_triggers = self::getSimpleTriggers($main_metrics, $options['displaying']);
+
+		$graph = (new CSvgGraph([
+			'displaying' => $options['displaying'],
+			'time_period' => $options['time_period'],
+			'axes' => $options['axes']
+		]))
+			->setSize($width, $main_height)
+			->hideTimeLabels()
+			->addMetrics($main_metrics)
+			->addSimpleTriggers($simple_triggers)
+			->addProblems(self::getProblems($main_metrics, $options['problems'], $options['time_period'],
+				$options['templateid'], $options['override_hostid'])
+			)
+			->prepare();
+
+		$comparison_graph = (new CSvgGraph([
+			'displaying' => $options['displaying'],
+			'time_period' => $comparison_time_period,
+			'axes' => $options['axes']
+		]))
+			->setSize($width, $comparison_height)
+			->addMetrics($comparison_metrics)
+			->addSimpleTriggers($simple_triggers)
+			->addProblems(self::getProblems($comparison_metrics, $options['problems'], $comparison_time_period,
+				$options['templateid'], $options['override_hostid'])
+			)
+			->prepare();
+
+		// Same Y axes in both graphs.
+		$graph->extendValueRange($comparison_graph->getValueRange());
+		$comparison_graph->extendValueRange($graph->getValueRange());
+
+		// Same time grid in both graphs: the comparison graph takes the grid positions of the main graph.
+		$graph->draw();
+		$comparison_graph
+			->setTimeGridOffset($graph->getTimeGridOffset())
+			->draw();
+
+		if (!$options['fix_time_period']) {
+			$graph->addSBox();
+		}
+
+		$graph->addHelper();
+		$comparison_graph->addHelper();
+
+		$get_data = static fn(CSvgGraph $graph, array $time_period): array => [
+			'dims' => [
+				'x' => $graph->getCanvasX(),
+				'y' => $graph->getCanvasY(),
+				'w' => $graph->getCanvasWidth(),
+				'h' => $graph->getCanvasHeight()
+			],
+			'spp' => $graph->getCanvasWidth() === 0
+				? 0
+				: ($time_period['time_to'] - $time_period['time_from']) / $graph->getCanvasWidth()
+		];
+
+		return [
+			'svg' => $graph.$comparison_graph,
+			'legend' => $legend ?? '',
+			'data' => $get_data($graph, $options['time_period']) + [
+				'panels' => [
+					$get_data($comparison_graph, $comparison_time_period) + [
+						'comparison_panel' => true,
+						'time_period' => [
+							'from_ts' => $comparison_time_period['time_from'],
+							'to_ts' => $comparison_time_period['time_to']
+						]
+					]
+				]
 			],
 			'errors' => $errors
 		];

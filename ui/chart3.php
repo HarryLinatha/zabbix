@@ -150,6 +150,10 @@ elseif (hasRequest('i') || hasRequest('items')) {
 		if (!array_key_exists($item['itemid'], $db_items)) {
 			access_deny();
 		}
+
+		// Comparison copies are made by the graph itself (see "compare"), never taken from the request.
+		unset($item['comparison'], $item['time_shift'], $item['last_idx']);
+
 		$host = reset($db_items[$item['itemid']]['hosts']);
 		$graph_items[] = $db_items[$item['itemid']] + $item + [
 			'host' => $host['host'],

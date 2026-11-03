@@ -423,7 +423,8 @@ class CLineGraphDraw extends CGraphDraw {
 				foreach ($result['data'] as $data_row) {
 					$idx = $data_row['i'];
 
-					if ($idx > $last_idx) {
+					// Comparison copies end at their own period; main items keep all values, as before.
+					if ($idx > $last_idx && array_key_exists('comparison', $item)) {
 						continue;
 					}
 
@@ -545,8 +546,9 @@ class CLineGraphDraw extends CGraphDraw {
 							$prev_shift = &$prev_data[$shift_var_name];
 							$prev_var = &$prev_data[$var_name];
 
-							$prev_var_ci = $prev_var ? $prev_var[$ci] : 0;
-							$prev_shift_ci = $prev_shift ? $prev_shift[$ci] : 0;
+							// A comparison copy has no values after the end of a shorter comparison period.
+							$prev_var_ci = $prev_var ? ($prev_var[$ci] ?? 0) : 0;
+							$prev_shift_ci = $prev_shift ? ($prev_shift[$ci] ?? 0) : 0;
 							$curr_shift[$ci] = $prev_var_ci + $prev_shift_ci;
 						}
 					}
@@ -2194,13 +2196,27 @@ class CLineGraphDraw extends CGraphDraw {
 	 * comparison period is always visible.
 	 */
 	private function drawComparisonLabel(): void {
-		if ($this->comparison === null) {
+		if ($this->comparison === null || $this->num == 0) {
 			return;
 		}
 
-		$label = _s('Compared with %1$s', $this->comparison['label']);
+		// The label must fit into the plot area: in narrow graphs only the dates are shown, or nothing at all (the
+		// legend still names the comparison period of each item).
 		$fontsize = 8;
-		$dims = imageTextSize($fontsize, 0, $label);
+		$label = null;
+
+		foreach ([_s('Compared with %1$s', $this->comparison['label']), $this->comparison['label']] as $text) {
+			$dims = imageTextSize($fontsize, 0, $text);
+
+			if ($dims['width'] + 8 <= $this->sizeX) {
+				$label = $text;
+				break;
+			}
+		}
+
+		if ($label === null) {
+			return;
+		}
 
 		$x = $this->shiftXleft + 4;
 		$y = $this->shiftY + 4;

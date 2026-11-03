@@ -28,6 +28,7 @@ class CSvgGraphLegend extends CDiv {
 	private const ZBX_STYLE_GRAPH_LEGEND_STATISTIC = 'svg-graph-legend-statistic';
 	private const ZBX_STYLE_GRAPH_LEGEND_HEADER = 'svg-graph-legend-header';
 	private const ZBX_STYLE_GRAPH_LEGEND_ITEM = 'svg-graph-legend-item';
+	private const ZBX_STYLE_GRAPH_LEGEND_ITEM_COMPARISON = 'svg-graph-legend-item-comparison';
 	private const ZBX_STYLE_GRAPH_LEGEND_NO_DATA = 'svg-graph-legend-no-data';
 	private const ZBX_STYLE_GRAPH_LEGEND_VALUE = 'svg-graph-legend-value';
 
@@ -42,6 +43,7 @@ class CSvgGraphLegend extends CDiv {
 	 * @param array  $legend_items
 	 * @param string $legend_items[]['name']
 	 * @param string $legend_items[]['color']
+	 * @param bool   $legend_items[]['comparison']  Whether the item is a "Compare with" series.
 	 * @param string $legend_items[]['units']
 	 * @param string $legend_items[]['min']
 	 * @param string $legend_items[]['avg']
@@ -103,11 +105,18 @@ class CSvgGraphLegend extends CDiv {
 
 		foreach ($this->legend_items as $item) {
 			// border-color is for legend element ::before pseudo element.
-			$this->addItem(
-				(new CDiv(new CSpan($item['name'])))
-					->addClass(self::ZBX_STYLE_GRAPH_LEGEND_ITEM)
-					->setAttribute('style', '--color: '.$item['color'])
-			);
+			$legend_item = (new CDiv(new CSpan($item['name'])))
+				->addClass(self::ZBX_STYLE_GRAPH_LEGEND_ITEM)
+				->setAttribute('style', '--color: '.$item['color']);
+
+			// "Compare with" series get a dashed marker and the full name as title, since long names are truncated.
+			if (!empty($item['comparison'])) {
+				$legend_item
+					->addClass(self::ZBX_STYLE_GRAPH_LEGEND_ITEM_COMPARISON)
+					->setTitle($item['name']);
+			}
+
+			$this->addItem($legend_item);
 
 			if ($this->show_statistic) {
 				if (array_key_exists('units', $item)) {

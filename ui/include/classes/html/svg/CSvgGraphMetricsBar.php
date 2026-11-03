@@ -43,11 +43,20 @@ class CSvgGraphMetricsBar extends CSvgGroup {
 			->addClass(self::ZBX_STYLE_CLASS)
 			->addClass(self::ZBX_STYLE_CLASS.'-'.$this->metric['itemid'].'-'.$this->options['order']);
 
-		return [
-			'.'.self::ZBX_STYLE_CLASS.'-'.$this->metric['itemid'].'-'.$this->options['order'] => [
+		$item_style = array_key_exists('comparison', $this->options)
+			? [
+				'fill-opacity' => 0,
+				'stroke' => $this->options['color'],
+				'stroke-opacity' => $this->options['transparency'] * 0.1,
+				'stroke-width' => 1
+			]
+			: [
 				'fill-opacity' => $this->options['transparency'] * 0.1,
 				'fill' => $this->options['color']
-			]
+			];
+
+		return [
+			'.'.self::ZBX_STYLE_CLASS.'-'.$this->metric['itemid'].'-'.$this->options['order'] => $item_style
 		];
 	}
 
@@ -69,6 +78,10 @@ class CSvgGraphMetricsBar extends CSvgGroup {
 	}
 
 	public function toString($destroy = true): string {
+		foreach (CSvgGraph::getComparisonAttributes($this->options) as $name => $value) {
+			$this->setAttribute($name, $value);
+		}
+
 		$this->setAttribute('data-set', 'bar')
 			->setAttribute('data-metric', $this->metric['name'])
 			->setAttribute('data-metric', $this->metric['name'])

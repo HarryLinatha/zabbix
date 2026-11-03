@@ -65,6 +65,11 @@
 			margin-right: 4px;
 			background: var(--color);
 		}
+
+		// "Compare with" series: dashed marker, matching the dashed line in the graph.
+		&.svg-graph-legend-item-comparison::before {
+			background: repeating-linear-gradient(90deg, var(--color) 0 3px, transparent 3px 5px);
+		}
 	}
 
 	.svg-graph-legend-no-data {

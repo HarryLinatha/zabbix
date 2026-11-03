@@ -387,7 +387,7 @@ class CTimePeriodHelper {
 	 *
 	 * @return string
 	 */
-	private static function getComparisonLabel(int $from_ts, int $to_ts, ?DateTimeZone $timezone = null): string {
+	public static function getComparisonLabel(int $from_ts, int $to_ts, ?DateTimeZone $timezone = null): string {
 		$timezone = $timezone ?? new DateTimeZone(date_default_timezone_get());
 
 		$from = (new DateTimeImmutable('@'.$from_ts))->setTimezone($timezone);

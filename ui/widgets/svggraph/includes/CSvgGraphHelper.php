@@ -28,6 +28,7 @@ use API,
 	CSeverityHelper,
 	CSimpleIntervalParser,
 	CSvgGraph,
+	CTimePeriodHelper,
 	Exception,
 	Manager;
 

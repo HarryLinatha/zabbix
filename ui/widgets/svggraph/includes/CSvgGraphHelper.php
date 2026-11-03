@@ -51,6 +51,8 @@ class CSvgGraphHelper {
 	 *        int    $options['legend_lines']     Number of lines in the legend.
 	 *        array  $options['problems']         Graph problems options.
 	 *        array  $options['overrides']        Graph override options.
+	 *        array  $options['comparison']       "Compare with" period or null, see
+	 *                                            CTimePeriodHelper::getComparisonPeriod().
 	 *
 	 * @param int $width
 	 * @param int $height
@@ -73,6 +75,8 @@ class CSvgGraphHelper {
 		// Reset unused Y-scale axes while taking overrides into account.
 		self::resetUnusedAxes($metrics, $options['axes']);
 		self::applyUnits($metrics, $options['axes']);
+		// Duplicate the metrics for the "Compare with" period, if any.
+		self::addComparisonMetrics($metrics, $errors, $options['comparison']);
 		// Apply time periods for each $metric, based on graph/dashboard time as well as metric level time shifts.
 		self::getTimePeriods($metrics, $options['time_period']);
 		// Find what data source (history or trends) will be used for each metric.
@@ -83,6 +87,10 @@ class CSvgGraphHelper {
 		self::populateValuesBetweenHeartbeats($metrics, $width);
 		// Load aggregated Data for each dataset.
 		self::getMetricsAggregatedData($metrics, $width, $options['data_sets'], $options['legend']['show_aggregation']);
+		self::applyComparisonNames($metrics);
+
+		// Comparison metrics repeat the storage period errors of their originals.
+		$errors = array_values(array_unique($errors));
 
 		$legend = self::getLegend($metrics, $options['legend']);
 
@@ -517,7 +525,79 @@ class CSvgGraphHelper {
 	}
 
 	/**
+	 * Add a comparison copy right after each metric, for the "Compare with" option.
+	 *
+	 * A copy differs from its original only by the time shift (the data set time shift plus the comparison shift),
+	 * so it is fetched for the comparison period and drawn on the x-axis of the main period by the existing time
+	 * shift logic. This runs after overrides and units are applied, so that copies get exactly the options and the
+	 * color of their originals (override colors are calculated from the number of matched metrics).
+	 *
+	 * The number of drawn metrics stays within today's maximum (SVG_GRAPH_MAX_NUMBER_OF_METRICS for both item
+	 * patterns and item lists), to keep the number of history requests per refresh unchanged; metrics beyond it are
+	 * shown without comparison.
+	 *
+	 * @param array      $metrics
+	 * @param array      $errors
+	 * @param array|null $comparison  Comparison period from CTimePeriodHelper::getComparisonPeriod().
+	 */
+	private static function addComparisonMetrics(array &$metrics, array &$errors, ?array $comparison): void {
+		if ($comparison === null || !$metrics) {
+			return;
+		}
+
+		$comparisons_left = SVG_GRAPH_MAX_NUMBER_OF_METRICS * 2 - count($metrics);
+		$has_skipped = false;
+		$result = [];
+
+		foreach ($metrics as $metric) {
+			$result[] = $metric;
+
+			if ($comparisons_left <= 0) {
+				$has_skipped = true;
+				continue;
+			}
+
+			$metric['options']['comparison'] = [
+				'length' => $comparison['to_ts'] - $comparison['from_ts'],
+				'label' => $comparison['label']
+			];
+			$metric['options']['timeshift'] += $comparison['shift'];
+
+			$result[] = $metric;
+			$comparisons_left--;
+		}
+
+		if ($has_skipped) {
+			$errors[] = _('Not all items are compared, because the maximum number of graph metrics is reached.');
+		}
+
+		$metrics = $result;
+	}
+
+	/**
+	 * Check if the metric is a "Compare with" copy.
+	 */
+	public static function isComparison(array $metric): bool {
+		return array_key_exists('comparison', $metric['options']);
+	}
+
+	/**
+	 * Add the comparison period to the names of comparison metrics, after all names are final.
+	 */
+	private static function applyComparisonNames(array &$metrics): void {
+		foreach ($metrics as &$metric) {
+			if (self::isComparison($metric)) {
+				$metric['name'] .= ' ('.$metric['options']['comparison']['label'].')';
+			}
+		}
+		unset($metric);
+	}
+
+	/**
 	 * Apply time period for each metric.
+	 *
+	 * Comparison metrics are limited to the length of the comparison period, which can be shorter than the main
+	 * period (e.g. February compared to March). Data after the end of the period is not drawn.
 	 */
 	private static function getTimePeriods(array &$metrics, array $options): void {
 		foreach ($metrics as &$metric) {
@@ -526,6 +606,11 @@ class CSvgGraphHelper {
 			if ($metric['options']['timeshift'] != 0) {
 				$metric['time_period']['time_from'] += $metric['options']['timeshift'];
 				$metric['time_period']['time_to'] += $metric['options']['timeshift'];
+			}
+
+			if (self::isComparison($metric)) {
+				$metric['time_period']['time_to'] = $metric['time_period']['time_from']
+					+ $metric['options']['comparison']['length'];
 			}
 		}
 		unset($metric);
@@ -779,6 +864,7 @@ class CSvgGraphHelper {
 			}
 
 			$dataset_num = $metric['data_set'];
+			$dataset_key = $dataset_num.':'.(int) self::isComparison($metric);
 
 			if ($metric['options']['aggregate_grouping'] == GRAPH_AGGREGATE_BY_ITEM) {
 				if ($legend_aggregation_show) {
@@ -801,7 +887,7 @@ class CSvgGraphHelper {
 				'source' => ($metric['source'] == SVG_GRAPH_DATA_SOURCE_HISTORY) ? 'history' : 'trends'
 			];
 
-			if (!array_key_exists($dataset_num, $dataset_metrics)) {
+			if (!array_key_exists($dataset_key, $dataset_metrics)) {
 				$metric = array_merge($metric, [
 					'name' => $name,
 					'items' => [],
@@ -818,13 +904,13 @@ class CSvgGraphHelper {
 				$metric['options']['aggregate_interval'] = (int) $aggregate_interval;
 
 				if ($metric['options']['aggregate_grouping'] == GRAPH_AGGREGATE_BY_DATASET) {
-					$dataset_metrics[$dataset_num] = $metric_num;
+					$dataset_metrics[$dataset_key] = $metric_num;
 				}
 
 				$metric['items'][] = $item;
 			}
 			else {
-				$metrics[$dataset_metrics[$dataset_num]]['items'][] = $item;
+				$metrics[$dataset_metrics[$dataset_key]]['items'][] = $item;
 				unset($metrics[$metric_num]);
 			}
 		}
@@ -950,7 +1036,8 @@ class CSvgGraphHelper {
 		foreach ($metrics as $metric) {
 			$item = [
 				'name' => $metric['name'],
-				'color' => $metric['options']['color']
+				'color' => $metric['options']['color'],
+				'comparison' => self::isComparison($metric)
 			];
 
 			if ($metric['points']) {
@@ -996,7 +1083,7 @@ class CSvgGraphHelper {
 		$limit = 3;
 
 		foreach ($metrics as &$metric) {
-			if ($metric['options']['stacked'] == SVG_GRAPH_STACKED_ON) {
+			if ($metric['options']['stacked'] == SVG_GRAPH_STACKED_ON || self::isComparison($metric)) {
 				continue;
 			}
 

@@ -19,7 +19,8 @@ namespace Widgets\SvgGraph\Actions;
 use CControllerDashboardWidgetView,
 	CControllerResponseData,
 	CNumberParser,
-	CParser;
+	CParser,
+	CTimePeriodHelper;
 
 use Widgets\SvgGraph\Includes\{
 	CSvgGraphHelper,
@@ -132,6 +133,16 @@ class WidgetView extends CControllerDashboardWidgetView {
 				? $this->fields_values['override_hostid'][0]
 				: ''
 		];
+
+		// "Compare with" period; null if not used or if there is nothing to compare with.
+		$graph_data['comparison'] = CTimePeriodHelper::getComparisonPeriod($graph_data['time_period']['time_from'],
+			$graph_data['time_period']['time_to'], (int) $this->fields_values['compare_with'],
+			match ((int) $this->fields_values['compare_with']) {
+				GRAPH_COMPARE_CUSTOM_SHIFT => $this->fields_values['compare_shift'],
+				GRAPH_COMPARE_CUSTOM_DATE => $this->fields_values['compare_date'],
+				default => ''
+			}
+		);
 
 		$svg_options = CSvgGraphHelper::get($graph_data, $width, $height);
 		if ($svg_options['errors']) {

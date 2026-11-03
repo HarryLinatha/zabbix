@@ -49,11 +49,21 @@ class CSvgGraphMetricsPoint extends CSvgGroup {
 			->addClass(self::ZBX_STYLE_CLASS)
 			->addClass(self::ZBX_STYLE_CLASS.'-'.$this->itemid.'-'.$this->options['order']);
 
-		return [
-			'.'.self::ZBX_STYLE_CLASS.'-'.$this->itemid.'-'.$this->options['order'] => [
+		// "Compare with" series are drawn hollow (outline only), to tell them apart by shape and not only by color.
+		$item_style = array_key_exists('comparison', $this->options)
+			? [
+				'fill-opacity' => 0,
+				'stroke' => $this->options['color'],
+				'stroke-opacity' => $this->options['transparency'] * 0.1,
+				'stroke-width' => 1
+			]
+			: [
 				'fill-opacity' => $this->options['transparency'] * 0.1,
 				'fill' => $this->options['color']
-			]
+			];
+
+		return [
+			'.'.self::ZBX_STYLE_CLASS.'-'.$this->itemid.'-'.$this->options['order'] => $item_style
 		];
 	}
 
@@ -71,6 +81,10 @@ class CSvgGraphMetricsPoint extends CSvgGroup {
 	}
 
 	public function toString($destroy = true): string {
+		foreach (CSvgGraph::getComparisonAttributes($this->options) as $name => $value) {
+			$this->setAttribute($name, $value);
+		}
+
 		$this
 			->setAttribute('data-set', 'points')
 			->setAttribute('data-metric', $this->item_name)

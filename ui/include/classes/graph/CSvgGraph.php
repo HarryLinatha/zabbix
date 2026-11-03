@@ -386,8 +386,10 @@ class CSvgGraph extends CSvg {
 				continue;
 			}
 
-			if (!array_key_exists($metric['data_set'], $surface)) {
-				$surface[$metric['data_set']] = [
+			$stack_key = self::getStackKey($metric);
+
+			if (!array_key_exists($stack_key, $surface)) {
+				$surface[$stack_key] = [
 					'positive' => [[$this->time_from, 0], [$this->time_till, 0]],
 					'negative' => [[$this->time_from, 0], [$this->time_till, 0]]
 				];
@@ -461,7 +463,7 @@ class CSvgGraph extends CSvg {
 				foreach (['positive', 'negative'] as $side) {
 					foreach ($side_fragments[$side] as $side_fragment) {
 						$this->stacked_points[$index][] = self::calculateStackedFragment($side_fragment,
-							$surface[$metric['data_set']][$side]
+							$surface[$stack_key][$side]
 						);
 					}
 				}
@@ -583,11 +585,13 @@ class CSvgGraph extends CSvg {
 							$stacked_dataset_groups[$clock] = [];
 						}
 
-						$group_index = array_key_exists($metric['data_set'], $stacked_dataset_groups[$clock])
-							? $stacked_dataset_groups[$clock][$metric['data_set']]
+						$stack_key = self::getStackKey($metric);
+
+						$group_index = array_key_exists($stack_key, $stacked_dataset_groups[$clock])
+							? $stacked_dataset_groups[$clock][$stack_key]
 							: count($this->bar_points[$metric['options']['axisy']][$clock]);
 
-						$stacked_dataset_groups[$clock][$metric['data_set']] = $group_index;
+						$stacked_dataset_groups[$clock][$stack_key] = $group_index;
 					}
 					else {
 						$group_index = count($this->bar_points[$metric['options']['axisy']][$clock]);
@@ -1237,8 +1241,66 @@ class CSvgGraph extends CSvg {
 		);
 	}
 
+	/**
+	 * Get the attributes marking a "Compare with" series for the hint box: the total time shift of the series and the
+	 * length of the comparison period, both in seconds. No attributes for other series.
+	 *
+	 * @param array $options  Metric options.
+	 *
+	 * @return array
+	 */
+	public static function getComparisonAttributes(array $options): array {
+		if (!array_key_exists('comparison', $options)) {
+			return [];
+		}
+
+		return [
+			'data-comparison' => 1,
+			'data-time-shift' => $options['timeshift'],
+			'data-comparison-length' => $options['comparison']['length']
+		];
+	}
+
+	/**
+	 * Check if the metric is a "Compare with" copy of another metric (drawn for an earlier period).
+	 */
+	private static function isComparison(array $metric): bool {
+		return array_key_exists('comparison', $metric['options']);
+	}
+
+	/**
+	 * Stacking group of a metric: comparison copies are stacked separately from the main period of the data set.
+	 */
+	private static function getStackKey(array $metric): string {
+		return $metric['data_set'].':'.(int) self::isComparison($metric);
+	}
+
+	/**
+	 * Reorder an array indexed by metric index so that comparison metrics come first, keeping the order otherwise.
+	 * Without comparison metrics the array is returned unchanged.
+	 *
+	 * @param array      $by_index  Array indexed by metric index.
+	 * @param array|null $metrics   Metrics to look up the indexes in; defaults to $by_index itself.
+	 */
+	private static function comparisonFirst(array $by_index, ?array $metrics = null): array {
+		$metrics = $metrics ?? $by_index;
+		$comparison = [];
+		$main = [];
+
+		foreach ($by_index as $index => $value) {
+			if (self::isComparison($metrics[$index])) {
+				$comparison[$index] = $value;
+			}
+			else {
+				$main[$index] = $value;
+			}
+		}
+
+		return $comparison + $main;
+	}
+
 	private function drawMetricsLine(): void {
-		foreach ($this->metrics as $index => $metric) {
+		foreach (self::comparisonFirst($this->metrics) as $index => $metric) {
 			if (!in_array($metric['options']['type'], [SVG_GRAPH_TYPE_LINE, SVG_GRAPH_TYPE_STAIRCASE])
 					|| $metric['options']['stacked'] == SVG_GRAPH_STACKED_ON
 					|| !array_key_exists($index, $this->paths)) {
@@ -1295,7 +1357,7 @@ class CSvgGraph extends CSvg {
 	}
 
 	private function drawMetricsStackedArea(): void {
-		foreach ($this->metrics as $index => $metric) {
+		foreach (self::comparisonFirst($this->metrics) as $index => $metric) {
 			if (!array_key_exists($index, $this->stacked_points)) {
 				continue;
 			}
@@ -1321,7 +1383,7 @@ class CSvgGraph extends CSvg {
 	}
 
 	private function drawMetricsPoint(): void {
-		foreach ($this->metrics as $index => $metric) {
+		foreach (self::comparisonFirst($this->metrics) as $index => $metric) {
 			if ($metric['options']['type'] == SVG_GRAPH_TYPE_POINTS && array_key_exists($index, $this->paths)) {
 				switch ($metric['options']['approximation']) {
 					case APPROXIMATION_MIN:
@@ -1340,7 +1402,9 @@ class CSvgGraph extends CSvg {
 	}
 
 	private function drawMetricsBar(): void {
-		foreach ($this->bar_paths as $metric_index => $path) {
+		$bar_paths = self::comparisonFirst($this->bar_paths, $this->metrics);
+
+		foreach ($bar_paths as $metric_index => $path) {
 			$this->addItem(new CSvgGraphMetricsBar($path, $this->metrics[$metric_index]));
 		}
 	}
@@ -1357,7 +1421,7 @@ class CSvgGraph extends CSvg {
 		}
 
 		foreach ($this->metrics as $index => $metric) {
-			if ($metric['options']['stacked'] == SVG_GRAPH_STACKED_ON) {
+			if ($metric['options']['stacked'] == SVG_GRAPH_STACKED_ON || self::isComparison($metric)) {
 				continue;
 			}
 

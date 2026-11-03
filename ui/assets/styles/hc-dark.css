@@ -3595,6 +3595,8 @@ section {
       height: 4px;
       margin-right: 4px;
       background: var(--color); }
+    .svg-graph-legend .svg-graph-legend-item.svg-graph-legend-item-comparison::before {
+      background: repeating-linear-gradient(90deg, var(--color) 0 3px, transparent 3px 5px); }
   .svg-graph-legend .svg-graph-legend-no-data {
     grid-column: 2 / -1;
     color: #cacaca; }

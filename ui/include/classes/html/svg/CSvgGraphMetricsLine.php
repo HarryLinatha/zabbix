@@ -49,6 +49,9 @@ class CSvgGraphMetricsLine extends CSvgGroup {
 			->addClass(CSvgGraphLine::ZBX_STYLE_CLASS)
 			->addClass($item_css_class);
 
+		$is_comparison = array_key_exists('comparison', $this->options);
+		$width = $is_comparison ? max(1, $this->options['width']) : $this->options['width'];
+
 		return [
 			'.'.CSvgGraphLine::ZBX_STYLE_CLASS => [
 				'fill' => 'none'
@@ -56,15 +59,17 @@ class CSvgGraphMetricsLine extends CSvgGroup {
 			'.'.$item_css_class => [
 				'stroke-opacity' => $this->options['transparency'] * 0.1,
 				'stroke' => $this->options['color'],
-				'stroke-width' => $this->options['width'] * ($this->options['approximation'] == APPROXIMATION_ALL ? 2 : 1)
-			] + ($this->options['type'] == SVG_GRAPH_TYPE_LINE ? ['stroke-linejoin' => 'round'] : []),
+				'stroke-width' => $width * ($this->options['approximation'] == APPROXIMATION_ALL ? 2 : 1)
+			]
+				+ ($this->options['type'] == SVG_GRAPH_TYPE_LINE ? ['stroke-linejoin' => 'round'] : [])
+				+ ($is_comparison ? ['stroke-dasharray' => max(4, 3 * $width).' '.max(3, 2 * $width)] : []),
 			'.'.$item_css_class.' circle' => [
 				'fill-opacity' => $this->options['transparency'] * 0.1,
 				'fill' => $this->options['color'],
 				'stroke-width' => 0
 			],
 			'.'.$item_css_class.' .'.CSvgGraphArea::ZBX_STYLE_CLASS => [
-				'fill-opacity' => $this->options['fill'] * 0.1,
+				'fill-opacity' => $this->options['fill'] * ($is_comparison ? 0.05 : 0.1),
 				'fill' => $this->options['color'],
 				'stroke-opacity' => 0
 			],
@@ -124,6 +129,10 @@ class CSvgGraphMetricsLine extends CSvgGroup {
 	}
 
 	public function toString($destroy = true): string {
+		foreach (CSvgGraph::getComparisonAttributes($this->options) as $name => $value) {
+			$this->setAttribute($name, $value);
+		}
+
 		$this
 			->setAttribute('data-set', $this->options['type'] == SVG_GRAPH_TYPE_LINE ? 'line' : 'staircase')
 			->setAttribute('data-metric', $this->metric['name'])

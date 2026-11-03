@@ -18,8 +18,11 @@ class CSvgGraph extends CSvg {
 
 	public const SVG_GRAPH_X_AXIS_HEIGHT = 20;
 
-	// Space below the canvas for the X axis line (with its arrow) when time labels are hidden.
-	public const SVG_GRAPH_X_AXIS_LINE_HEIGHT = 5;
+	/*
+	 * Space below the canvas when time labels are hidden: the X axis line with its arrow, and the 15px area in which
+	 * the hint of problems is shown (class.csvggraph.js).
+	 */
+	public const SVG_GRAPH_X_AXIS_LINE_HEIGHT = 15;
 
 	// Space above the canvas.
 	private const SVG_GRAPH_CANVAS_OFFSET_TOP = 10;

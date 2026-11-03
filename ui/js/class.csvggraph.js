@@ -112,7 +112,10 @@
 		const widget = graph.data('widget');
 		const svgs = widget !== undefined && Array.isArray(widget._svgs) ? widget._svgs : [];
 
-		return svgs.length > 1 && svgs.includes(graph[0]) ? svgs.map((svg) => jQuery(svg)) : [graph];
+		// The jQuery object of an active graph is the one its event handlers use (hint state is kept on it).
+		return svgs.length > 1 && svgs.includes(graph[0])
+			? svgs.map((svg) => jQuery(svg).data('graph') || jQuery(svg))
+			: [graph];
 	}
 
 	// Check if the graph or a graph linked to it has a frozen (static) hint; widget refresh is paused while it has.
@@ -138,6 +141,16 @@
 			data = graph.data('options'),
 			hbox = graph.data('hintbox'),
 			content = hbox ? hbox.find('> div') : null;
+
+		// One frozen hint per widget: a frozen hint of a linked graph is closed first.
+		for (const linked_graph of getLinkedGraphs(graph)) {
+			const linked_data = linked_graph.data('options');
+
+			if (linked_graph[0] !== graph[0] && linked_graph.hintBoxItem
+					&& (linked_data.isHintBoxFrozen || linked_data.isTriggerHintBoxFrozen)) {
+				hintBox.deleteHint(linked_graph, false);
+			}
+		}
 
 		// Destroy old hintbox to make new one with close button.
 		destroyHintbox(graph);
@@ -569,6 +582,12 @@
 			return;
 		}
 
+		// While a linked graph has a frozen hint, this graph shows no hint of its own (one hint per widget).
+		if (getLinkedGraphs(graph).some((linked_graph) => linked_graph[0] !== graph[0]
+				&& (linked_graph.data('options').isHintBoxFrozen || linked_graph.data('options').isTriggerHintBoxFrozen))) {
+			return;
+		}
+
 		if (data.boxing === true) {
 			hideHelper(graph);
 			return;
@@ -826,6 +845,8 @@
 			const widget = jQuery(this).data('widget');
 			const graph = jQuery(this);
 			const data = graph.data('options');
+
+			graph.data('graph', graph);
 
 			graph
 				.on('mousemove', (e) => {

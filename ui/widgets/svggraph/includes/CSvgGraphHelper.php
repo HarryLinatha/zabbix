@@ -37,6 +37,9 @@ use API,
  */
 class CSvgGraphHelper {
 
+	// Minimal canvas height of each graph in the "Compare with" separate graphs layout.
+	private const SEPARATE_GRAPHS_MIN_CANVAS_HEIGHT = 50;
+
 	/**
 	 * Calculate graph data and draw SVG graph based on given graph configuration.
 	 *
@@ -99,11 +102,12 @@ class CSvgGraphHelper {
 
 		$svg_height = max(0, $height - ($legend !== null ? $legend->getHeight() : 0));
 
-		// Separate graphs need room for two graphs; otherwise (very small widgets) both periods are drawn in one graph.
+		// Separate graphs need room for two readable graphs; otherwise both periods are drawn in one graph.
 		if ($options['comparison'] !== null
 				&& ($options['comparison_layout'] ?? WidgetForm::COMPARE_LAYOUT_OVERLAY)
 					== WidgetForm::COMPARE_LAYOUT_SEPARATE
-				&& $svg_height >= CSvgGraph::getHeightForCanvas(0, false) + CSvgGraph::getHeightForCanvas(0)
+				&& $svg_height >= CSvgGraph::getHeightForCanvas(self::SEPARATE_GRAPHS_MIN_CANVAS_HEIGHT, false)
+					+ CSvgGraph::getHeightForCanvas(self::SEPARATE_GRAPHS_MIN_CANVAS_HEIGHT)
 				&& array_filter($metrics, [self::class, 'isComparison'])) {
 			return self::getSeparateGraphs($metrics, $options, $width, $svg_height, $legend, $errors);
 		}

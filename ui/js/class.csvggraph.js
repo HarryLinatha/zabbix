@@ -103,10 +103,24 @@
 		}
 	}
 
+	/**
+	 * Get the graphs shown together with the given graph in one widget ("Compare with" in separate graphs: the main
+	 * graph and the comparison graph below it, with the same dimensions). The value hint and the helper line cover all
+	 * of them. Otherwise only the graph itself.
+	 */
+	function getLinkedGraphs(graph) {
+		const widget = graph.data('widget');
+		const svgs = widget !== undefined && Array.isArray(widget._svgs) ? widget._svgs : [];
+
+		return svgs.length > 1 && svgs.includes(graph[0]) ? svgs.map((svg) => jQuery(svg)) : [graph];
+	}
+
 	// Hide vertical helper line and highlighted data points.
 	function hideHelper(graph) {
-		graph.find('.svg-helper').attr({'x1': -10, 'x2': -10});
-		graph.find('.svg-point-highlight').attr({'cx': -10, 'cy': -10});
+		for (const linked_graph of getLinkedGraphs(graph)) {
+			linked_graph.find('.svg-helper').attr({'x1': -10, 'x2': -10});
+			linked_graph.find('.svg-point-highlight').attr({'cx': -10, 'cy': -10});
+		}
 	}
 
 	// Create a new hintbox and stick it to certain position where user has clicked.
@@ -477,13 +491,19 @@
 
 	// Set position of vertical helper line.
 	function setHelperPosition(e, graph) {
-		var data = graph.data('options');
-		graph.find('.svg-helper').attr({
-			'x1': e.clientX - graph.offset().left,
-			'y1': data.dimY,
-			'x2': e.clientX - graph.offset().left,
-			'y2': data.dimY + data.dimH
-		});
+		const x = e.clientX - graph.offset().left;
+
+		// Linked graphs have the same dimensions: the same horizontal position is the same time in each period.
+		for (const linked_graph of getLinkedGraphs(graph)) {
+			const data = linked_graph.data('options');
+
+			linked_graph.find('.svg-helper').attr({
+				'x1': x,
+				'y1': data.dimY,
+				'x2': x,
+				'y2': data.dimY + data.dimH
+			});
+		}
 	}
 
 	/**
@@ -591,13 +611,21 @@
 			// Time offset of the mouse position from the start of the graph period.
 			const offset = (offsetX - data.dimX) * data.spp;
 
-			// Find values. "Compare with" series are drawn below the main series, but listed after them, so that the
-			// row limit cuts comparison rows first. A comparison series ends early if its period is shorter than the
-			// graph period: its points past the end are left out (and not counted) and their highlight is hidden.
+			/*
+			 * Find values, in this graph and in the graphs linked to it (see getLinkedGraphs()). "Compare with" series
+			 * are drawn below the main series, but listed after them, so that the row limit cuts comparison rows
+			 * first. A comparison series ends early if its period is shorter than the graph period: its points past the
+			 * end are left out (and not counted) and their highlight is hidden.
+			 */
+			const linked_graphs = getLinkedGraphs(graph);
 			var points = [],
 				comparison_points = [];
 
-			findValues(graph[0], offsetX).forEach(function(point) {
+			linked_graphs.flatMap((linked_graph) => findValues(linked_graph[0], offsetX).map((point) => ({
+				...point,
+				in_graph: linked_graph[0] === graph[0],
+				from_ts: linked_graph.data('options').timePeriod.from_ts
+			}))).forEach(function(point) {
 				if (!point.g.hasAttribute('data-comparison')) {
 					points.push(point);
 				}
@@ -630,7 +658,7 @@
 					}
 
 					tolerance = getDataPointTolerance(point.g);
-					if (!xy_point && point.v !== null
+					if (!xy_point && point.v !== null && point.in_graph
 							&& (+point.x + tolerance) > e.offsetX && e.offsetX > (+point.x - tolerance)
 							&& (+point.y + tolerance) > e.offsetY && e.offsetY > (+point.y - tolerance)) {
 						xy_point = point;
@@ -660,13 +688,10 @@
 					if (show_hint && data.hintMaxRows > rows_added) {
 						let text = point.g.getAttribute('data-metric') + ': ' + point.v;
 
-						/*
-						 * Show the real time of a comparison value; the header shows the time of the graph period
-						 * (except in the comparison graph of separate graphs, where the header already shows it).
-						 */
-						if (is_comparison && !data.isComparisonPanel) {
+						// Show the real time of a comparison value; the header shows the time of the main period.
+						if (is_comparison) {
 							const comparison_time = new CDate(
-								(data.timePeriod.from_ts + offset + Number(point.g.getAttribute('data-time-shift'))) * 1000
+								(point.from_ts + offset + Number(point.g.getAttribute('data-time-shift'))) * 1000
 							);
 
 							text += ' (' + comparison_time.format(PHP_ZBX_FULL_DATE_TIME) + ')';
@@ -690,8 +715,8 @@
 			});
 
 			if (show_hint) {
-				// Calculate time at mouse position.
-				const time = new CDate((data.timePeriod.from_ts + offset) * 1000);
+				// Calculate time at mouse position, in the period of the main graph (the first linked graph).
+				const time = new CDate((linked_graphs[0].data('options').timePeriod.from_ts + offset) * 1000);
 
 				html = jQuery('<div>')
 					.addClass('svg-graph-hintbox')
@@ -773,7 +798,6 @@
 						timePeriod: svg_options.time_period,
 						minPeriod: svg_options.min_period,
 						sbox: svg_options.sbox,
-						isComparisonPanel: svg_options.comparison_panel === true,
 						boxing: false
 					})
 					.data('widget', widget)

@@ -259,7 +259,6 @@ class CSvgGraphHelper {
 			'data' => $get_data($graph, $options['time_period']) + [
 				'panels' => [
 					$get_data($comparison_graph, $comparison_time_period) + [
-						'comparison_panel' => true,
 						'time_period' => [
 							'from_ts' => $comparison_time_period['time_from'],
 							'to_ts' => $comparison_time_period['time_to']

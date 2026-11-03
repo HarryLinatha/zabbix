@@ -18,6 +18,7 @@ namespace Widgets\SvgGraph\Includes;
 
 use CNumberParser,
 	CParser,
+	CTimePeriodHelper,
 	CWidgetsData;
 
 use Zabbix\Widgets\{
@@ -27,6 +28,7 @@ use Zabbix\Widgets\{
 
 use Zabbix\Widgets\Fields\{
 	CWidgetFieldCheckBox,
+	CWidgetFieldDatePicker,
 	CWidgetFieldPatternSelectHost,
 	CWidgetFieldMultiSelectOverrideHost,
 	CWidgetFieldNumericBox,
@@ -73,6 +75,8 @@ class WidgetForm extends CWidgetForm {
 
 	private bool $problems_on = false;
 
+	private int $compare_with = GRAPH_COMPARE_NONE;
+
 	public function validate(bool $strict = false): array {
 		$errors = parent::validate($strict);
 
@@ -115,6 +119,20 @@ class WidgetForm extends CWidgetForm {
 						_s('value must be between "%1$s" and "%2$s"', self::PERCENTILE_MIN, self::PERCENTILE_MAX)
 					);
 				}
+			}
+		}
+
+		// "Compare with": the custom shift is validated here; an invalid custom date is reported by its own field.
+		if ($this->compare_with == GRAPH_COMPARE_CUSTOM_SHIFT
+				|| ($this->compare_with == GRAPH_COMPARE_CUSTOM_DATE && $this->getFieldValue('compare_date') === '')) {
+			$value = $this->compare_with == GRAPH_COMPARE_CUSTOM_SHIFT
+				? $this->getFieldValue('compare_shift')
+				: $this->getFieldValue('compare_date');
+
+			$error = CTimePeriodHelper::validateComparisonValue($this->compare_with, $value, _('Compare with'));
+
+			if ($error !== null) {
+				$errors[] = $error;
 			}
 		}
 
@@ -203,6 +221,18 @@ class WidgetForm extends CWidgetForm {
 
 		if (!$this->righty_on || !$this->righty_units_static) {
 			unset($values['righty_static_units']);
+		}
+
+		if (array_key_exists('compare_with', $values)) {
+			$this->compare_with = (int) $values['compare_with'];
+		}
+
+		if ($this->compare_with != GRAPH_COMPARE_CUSTOM_SHIFT) {
+			unset($values['compare_shift']);
+		}
+
+		if ($this->compare_with != GRAPH_COMPARE_CUSTOM_DATE) {
+			unset($values['compare_date']);
 		}
 
 		if (array_key_exists('legend', $values)) {
@@ -298,6 +328,19 @@ class WidgetForm extends CWidgetForm {
 					])
 					->setDefaultPeriod(['from' => 'now-1h', 'to' => 'now'])
 					->setFlags(CWidgetField::FLAG_NOT_EMPTY | CWidgetField::FLAG_LABEL_ASTERISK)
+			)
+			->addField(
+				(new CWidgetFieldSelect('compare_with', _('Compare with'), CTimePeriodHelper::getComparisonModes()))
+					->setDefault(GRAPH_COMPARE_NONE)
+			)
+			->addField(
+				(new CWidgetFieldTextBox('compare_shift', _('Custom shift')))
+					->setFlags($this->compare_with != GRAPH_COMPARE_CUSTOM_SHIFT ? CWidgetField::FLAG_DISABLED : 0x00)
+					->setMaxLength(255)
+			)
+			->addField(
+				(new CWidgetFieldDatePicker('compare_date', _('Custom start date')))
+					->setFlags($this->compare_with != GRAPH_COMPARE_CUSTOM_DATE ? CWidgetField::FLAG_DISABLED : 0x00)
 			);
 	}
 

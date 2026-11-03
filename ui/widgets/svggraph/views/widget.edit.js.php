@@ -897,6 +897,22 @@ window.widget_form = new class extends CWidgetForm {
 				? <?= json_encode(_('Maximum number of rows')) ?>
 				: <?= json_encode(_('Number of rows')) ?>;
 
+		// Time period tab: only the input of the selected "Compare with" custom mode is shown and submitted.
+		const compare_with = document.getElementById('compare_with').value;
+		const is_compare_shift = compare_with == <?= GRAPH_COMPARE_CUSTOM_SHIFT ?>;
+		const is_compare_date = compare_with == <?= GRAPH_COMPARE_CUSTOM_DATE ?>;
+
+		const compare_shift = document.getElementById('compare_shift');
+		compare_shift.classList.toggle(ZBX_STYLE_DISPLAY_NONE, !is_compare_shift);
+		compare_shift.disabled = !is_compare_shift;
+
+		const compare_date = document.getElementById('compare_date').closest('.date-selector');
+		compare_date.classList.toggle(ZBX_STYLE_DISPLAY_NONE, !is_compare_date);
+
+		for (const element of compare_date.querySelectorAll('input, button')) {
+			element.disabled = !is_compare_date;
+		}
+
 		// Trigger event to update tab indicators.
 		document.getElementById('tabs').dispatchEvent(new Event(TAB_INDICATOR_UPDATE_EVENT));
 	}

@@ -35,7 +35,10 @@ $fields = [
 	'onlyHeight' =>		[T_ZBX_INT,			O_OPT, null,	IN('0,1'),	null],
 	'legend' =>			[T_ZBX_INT,			O_OPT, null,	IN('0,1'),	null],
 	'widget_view' =>	[T_ZBX_INT,			O_OPT, null,	IN('0,1'),	null],
-	'resolve_macros' =>	[T_ZBX_INT,			O_OPT, null,	IN('0,1'),	null]
+	'resolve_macros' =>	[T_ZBX_INT,			O_OPT, null,	IN('0,1'),	null],
+	'compare' =>		[T_ZBX_INT,			O_OPT, null,
+		IN(array_keys(CTimePeriodHelper::getComparisonModes())),		null],
+	'compare_value' =>	[T_ZBX_STR,			O_OPT, null,	null,		null]
 ];
 if (!check_fields($fields)) {
 	session_write_close();
@@ -137,6 +140,7 @@ foreach ($dbGraph['hosts'] as $gItemHost) {
 $graph->setHeader(($hostName === '') ? $dbGraph['name'] : $hostName.NAME_DELIMITER.$dbGraph['name']);
 $graph->setPeriod($timeline['to_ts'] - $timeline['from_ts']);
 $graph->setSTime($timeline['from_ts']);
+$graph->setComparison(getGraphComparisonPeriod($timeline));
 
 $width = getRequest('width', 0);
 if ($width <= 0) {

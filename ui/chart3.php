@@ -49,7 +49,10 @@ $fields = [
 	'i' =>				[T_ZBX_STR,			O_OPT, P_ONLY_ARRAY,	null,			null],
 	'onlyHeight' =>		[T_ZBX_INT,			O_OPT, null,		IN('0,1'),			null],
 	'widget_view' =>	[T_ZBX_INT,			O_OPT, null,		IN('0,1'),			null],
-	'resolve_macros' =>	[T_ZBX_INT,			O_OPT, null,		IN('0,1'),			null]
+	'resolve_macros' =>	[T_ZBX_INT,			O_OPT, null,		IN('0,1'),			null],
+	'compare' =>		[T_ZBX_INT,			O_OPT, null,
+		IN(array_keys(CTimePeriodHelper::getComparisonModes())),		null],
+	'compare_value' =>	[T_ZBX_STR,			O_OPT, null,		null,				null]
 ];
 if (!check_fields($fields)) {
 	session_write_close();
@@ -181,6 +184,7 @@ $graph = new CLineGraphDraw(getRequest('graphtype', GRAPH_TYPE_NORMAL));
 $graph->setHeader($name);
 $graph->setPeriod($timeline['to_ts'] - $timeline['from_ts']);
 $graph->setSTime($timeline['from_ts']);
+$graph->setComparison(getGraphComparisonPeriod($timeline));
 $graph->setWidth(getRequest('width', 900));
 $graph->setHeight(getRequest('height', 200));
 $graph->showLegend(getRequest('legend', 1));

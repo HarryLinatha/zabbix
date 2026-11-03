@@ -36,7 +36,10 @@ $fields = [
 	'onlyHeight' =>		[T_ZBX_INT,			O_OPT, null,	IN('0,1'),	null],
 	'legend' =>			[T_ZBX_INT,			O_OPT, null,	IN('0,1'),	null],
 	'widget_view' =>	[T_ZBX_INT,			O_OPT, null,	IN('0,1'),	null],
-	'resolve_macros' =>	[T_ZBX_INT,			O_OPT, null,	IN('0,1'),	null]
+	'resolve_macros' =>	[T_ZBX_INT,			O_OPT, null,	IN('0,1'),	null],
+	'compare' =>		[T_ZBX_INT,			O_OPT, null,
+		IN(array_keys(CTimePeriodHelper::getComparisonModes())),		null],
+	'compare_value' =>	[T_ZBX_STR,			O_OPT, null,	null,		null]
 ];
 if (!check_fields($fields)) {
 	session_write_close();
@@ -96,6 +99,7 @@ $timeline = getTimeSelectorPeriod([
 $graph = new CLineGraphDraw(getRequest('type'));
 $graph->setPeriod($timeline['to_ts'] - $timeline['from_ts']);
 $graph->setSTime($timeline['from_ts']);
+$graph->setComparison(getGraphComparisonPeriod($timeline));
 $graph->showLegend(getRequest('legend', 1));
 
 // change how the graph will be displayed if more than one item is selected

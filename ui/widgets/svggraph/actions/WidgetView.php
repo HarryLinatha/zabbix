@@ -20,7 +20,8 @@ use CControllerDashboardWidgetView,
 	CControllerResponseData,
 	CNumberParser,
 	CParser,
-	CRangeTimeParser;
+	CRangeTimeParser,
+	CTimePeriodHelper;
 
 use Widgets\SvgGraph\Includes\{
 	CSvgGraphHelper,
@@ -148,6 +149,16 @@ class WidgetView extends CControllerDashboardWidgetView {
 
 		$range_time_parser->parse($this->fields_values['time_period']['to']);
 		$graph_data['time_period']['time_to'] = $range_time_parser->getDateTime(false)->getTimestamp();
+
+		// "Compare with" period; null if not used or if there is nothing to compare with.
+		$graph_data['comparison'] = CTimePeriodHelper::getComparisonPeriod($graph_data['time_period']['time_from'],
+			$graph_data['time_period']['time_to'], (int) $this->fields_values['compare_with'],
+			match ((int) $this->fields_values['compare_with']) {
+				GRAPH_COMPARE_CUSTOM_SHIFT => $this->fields_values['compare_shift'],
+				GRAPH_COMPARE_CUSTOM_DATE => $this->fields_values['compare_date'],
+				default => ''
+			}
+		);
 
 		$svg_options = CSvgGraphHelper::get($graph_data, $width, $height);
 		if ($svg_options['errors']) {

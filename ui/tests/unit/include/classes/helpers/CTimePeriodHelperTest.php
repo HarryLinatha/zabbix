@@ -54,7 +54,8 @@ class CTimePeriodHelperTest extends TestCase {
 			['5ms', null],
 			['{$SHIFT}', null],
 			['-12345678901d', null],
-			['d', null]
+			['d', null],
+			["-1d\n", null]
 		];
 	}
 

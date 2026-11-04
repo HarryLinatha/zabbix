@@ -101,6 +101,13 @@ class CWidgetBase {
 	#enlarged = null;
 
 	/**
+	 * Timeout of the delayed re-size of an enlarged widget after the browser window is re-sized, or null.
+	 *
+	 * @type {number|null}
+	 */
+	#enlarged_resize_timeout = null;
+
+	/**
 	 * Widget constructor. Invoked by a dashboard page.
 	 *
 	 * @param {string}      type                Widget type ("id" field of the manifest.json).
@@ -1565,7 +1572,9 @@ class CWidgetBase {
 		this._button_enlarge.title = t('Restore size');
 		this._button_enlarge.classList.replace(ZBX_ICON_FULLSCREEN, ZBX_ICON_MINIMIZE);
 
-		document.addEventListener('keydown', this._events.enlargedKeydown);
+		// Capture phase: the page's own Escape handlers (bubble phase on the document) must not have closed their
+		// dialog, hint, menu or graph selection yet when enlargedKeydown decides whether Escape is meant for them.
+		document.addEventListener('keydown', this._events.enlargedKeydown, true);
 		window.addEventListener('resize', this._events.enlargedResize);
 
 		this.resize();
@@ -1579,8 +1588,13 @@ class CWidgetBase {
 			return;
 		}
 
-		document.removeEventListener('keydown', this._events.enlargedKeydown);
+		document.removeEventListener('keydown', this._events.enlargedKeydown, true);
 		window.removeEventListener('resize', this._events.enlargedResize);
+
+		if (this.#enlarged_resize_timeout !== null) {
+			clearTimeout(this.#enlarged_resize_timeout);
+			this.#enlarged_resize_timeout = null;
+		}
 
 		const {grid, backdrop, grid_z_index} = this.#enlarged;
 
@@ -1949,15 +1963,39 @@ class CWidgetBase {
 			},
 
 			enlargedKeydown: e => {
-				// Escape restores the size, unless it closes something else (a dialog or a menu) first.
-				if (e.key === 'Escape' && !e.defaultPrevented && overlays_stack.length == 0
-						&& document.querySelector('.menu-popup') === null) {
+				if (e.key !== 'Escape') {
+					return;
+				}
+
+				// Escape restores the size only when it has nothing else to do: not in a form field (z-select and
+				// multiselect lists close on Escape), and with no open dialog, hint or menu (all in overlays_stack, or a
+				// .menu-popup) and no Graph widget zoom selection in progress (cancelled by Escape). Checked in the
+				// capture phase, before those handlers close what they own.
+				const has_other_target = (e.target instanceof Element
+						&& e.target.closest('input, textarea, select, z-select, .multiselect-control') !== null)
+					|| overlays_stack.length > 0
+					|| document.querySelector('.menu-popup') !== null
+					|| [...document.querySelectorAll('svg.svg-graph')].some(svg => jQuery(svg).data('options')?.boxing);
+
+				if (!has_other_target) {
 					this.restoreSize();
 				}
 			},
 
+			// Re-size once the browser window stops changing size (as the dashboard page does), not on every event: each
+			// re-size of a Graph (classic) widget loads a new image.
 			enlargedResize: () => {
-				this.resize();
+				if (this.#enlarged_resize_timeout !== null) {
+					clearTimeout(this.#enlarged_resize_timeout);
+				}
+
+				this.#enlarged_resize_timeout = setTimeout(() => {
+					this.#enlarged_resize_timeout = null;
+
+					if (this.isEnlarged()) {
+						this.resize();
+					}
+				}, 200);
 			},
 
 			focusin: () => {

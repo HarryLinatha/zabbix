@@ -180,7 +180,7 @@ class CTimePeriodHelper {
 	 * @return array|null  ['count' => int, 'unit' => string] or null if the value is not a non-zero time shift.
 	 */
 	public static function parseTimeShift(string $value): ?array {
-		if (!preg_match('/^(?<count>-?\d{1,10})(?<unit>[smhdwMy]?)$/', $value, $matches)) {
+		if (!preg_match('/^(?<count>-?\d{1,10})(?<unit>[smhdwMy]?)$/D', $value, $matches)) {
 			return null;
 		}
 

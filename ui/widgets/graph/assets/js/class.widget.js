@@ -19,6 +19,10 @@ class CWidgetGraph extends CWidget {
 		this._is_graph_mode = false;
 	}
 
+	isEnlargeable() {
+		return true;
+	}
+
 	onStart() {
 		this.events_handlers = {
 			rangeUpdate: (e) => {

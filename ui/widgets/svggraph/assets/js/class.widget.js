@@ -22,6 +22,10 @@ class CWidgetSvgGraph extends CWidget {
 		this._svg_options = {};
 	}
 
+	isEnlargeable() {
+		return true;
+	}
+
 	onActivate() {
 		this._activateGraph();
 	}

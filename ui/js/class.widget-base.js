@@ -94,6 +94,13 @@ class CWidgetBase {
 	#has_ever_updated = false;
 
 	/**
+	 * State of an enlarged widget (see enlarge()), or null.
+	 *
+	 * @type {Object|null}
+	 */
+	#enlarged = null;
+
+	/**
 	 * Widget constructor. Invoked by a dashboard page.
 	 *
 	 * @param {string}      type                Widget type ("id" field of the manifest.json).
@@ -307,6 +314,9 @@ class CWidgetBase {
 		}
 
 		this._state = WIDGET_STATE_INACTIVE;
+
+		// An enlarged widget gets its place back when the dashboard page is left (e.g. slideshow).
+		this.restoreSize();
 
 		if (this._is_new) {
 			this._is_new = false;
@@ -763,6 +773,14 @@ class CWidgetBase {
 	 * Set widget to editing mode. This is one-way action.
 	 */
 	setEditMode() {
+		this.restoreSize();
+
+		// Enlarging is for viewing only.
+		if (this._button_enlarge !== undefined) {
+			this._button_enlarge.closest('li').remove();
+			delete this._button_enlarge;
+		}
+
 		this._is_edit_mode = true;
 
 		if (this._state === WIDGET_STATE_ACTIVE) {
@@ -1483,6 +1501,109 @@ class CWidgetBase {
 	}
 
 	/**
+	 * Whether the widget can be enlarged (shown over the dashboard page for a closer look). Redefined by widgets that
+	 * support it.
+	 *
+	 * @returns {boolean}
+	 */
+	isEnlargeable() {
+		return false;
+	}
+
+	/**
+	 * @returns {boolean}
+	 */
+	isEnlarged() {
+		return this.#enlarged !== null;
+	}
+
+	/**
+	 * Enlarge the widget: show it over the visible part of the dashboard page, across its full width, with the other
+	 * widgets dimmed below. The widget stays the same live widget (it is only re-sized and re-rendered), so the time
+	 * period, hints, zooming and refreshing work as usual. Nothing is saved: the widget gets its place back with the
+	 * header button, Escape, a click on the dimmed area, on leaving the page or on editing the dashboard.
+	 *
+	 * The widget is positioned in dashboard grid coordinates (not fixed to the viewport), so it moves with the page
+	 * like the other widgets; it is placed at the top of the visible part of the grid and fills the viewport height.
+	 */
+	enlarge() {
+		const grid = this._target.offsetParent;
+
+		if (this.isEnlarged() || this._is_edit_mode || this._state !== WIDGET_STATE_ACTIVE || grid === null) {
+			return;
+		}
+
+		// The theme's dialog backdrop, placed in the grid: above other widgets (and their headers, z-index 3-5),
+		// below the enlarged widget, and below the page header and time selector.
+		const backdrop = document.createElement('div');
+
+		backdrop.classList.add('overlay-bg');
+		Object.assign(backdrop.style, {position: 'absolute', zIndex: 6});
+		backdrop.addEventListener('click', () => this.restoreSize());
+		grid.appendChild(backdrop);
+
+		this.#enlarged = {grid, backdrop};
+		this._target.style.zIndex = 7;
+		this.#updateEnlargedPosition();
+
+		this._button_enlarge.title = t('Restore size');
+		this._button_enlarge.classList.replace(ZBX_ICON_FULLSCREEN, ZBX_ICON_MINIMIZE);
+
+		document.addEventListener('keydown', this._events.enlargedKeydown);
+		window.addEventListener('resize', this._events.enlargedResize);
+
+		this.resize();
+	}
+
+	/**
+	 * Put an enlarged widget back to its place on the dashboard page.
+	 */
+	restoreSize() {
+		if (!this.isEnlarged()) {
+			return;
+		}
+
+		document.removeEventListener('keydown', this._events.enlargedKeydown);
+		window.removeEventListener('resize', this._events.enlargedResize);
+
+		this.#enlarged.backdrop.remove();
+		this.#enlarged = null;
+
+		this._target.style.zIndex = '';
+		this.setPos(this._pos);
+
+		this._button_enlarge.title = t('Enlarge');
+		this._button_enlarge.classList.replace(ZBX_ICON_MINIMIZE, ZBX_ICON_FULLSCREEN);
+
+		if (this._state === WIDGET_STATE_ACTIVE) {
+			this.resize();
+		}
+	}
+
+	/**
+	 * Place an enlarged widget at the top of the visible part of the dashboard grid, and size the backdrop to cover
+	 * the grid and the widget.
+	 */
+	#updateEnlargedPosition() {
+		const {grid, backdrop} = this.#enlarged;
+		const grid_rect = grid.getBoundingClientRect();
+
+		// Space left below the widget, and the smallest height (for very small windows).
+		const margin_bottom = 8;
+		const min_height = 300;
+
+		const top = Math.max(0, -grid_rect.top);
+		const height = Math.max(min_height,
+			document.documentElement.clientHeight - Math.max(0, grid_rect.top) - margin_bottom
+		);
+
+		Object.assign(this._target.style, {left: 0, top: `${top}px`, width: '100%', height: `${height}px`});
+		Object.assign(backdrop.style, {left: 0, top: 0, width: '100%',
+			height: `${Math.max(grid.offsetHeight, top + height)}px`
+		});
+	}
+
+	/**
 	 * Calculate which of the four sides are affected by the resize handle.
 	 *
 	 * @param {HTMLElement} resize_handle  One of eight dots by which the widget can be resized in editing mode.
@@ -1735,6 +1856,18 @@ class CWidgetBase {
 		this._actions = document.createElement('ul');
 		this._actions.classList.add(this._css_classes.actions);
 
+		if (this.isEnlargeable() && !this._is_edit_mode) {
+			this._button_enlarge = document.createElement('button');
+			this._button_enlarge.type = 'button';
+			this._button_enlarge.title = t('Enlarge');
+			this._button_enlarge.classList.add(ZBX_STYLE_BTN_ICON, ZBX_ICON_FULLSCREEN, 'js-widget-enlarge');
+
+			const li = document.createElement('li');
+
+			li.appendChild(this._button_enlarge);
+			this._actions.appendChild(li);
+		}
+
 		if (this._is_editable) {
 			this._button_edit = document.createElement('button');
 			this._button_edit.type = 'button';
@@ -1810,6 +1943,28 @@ class CWidgetBase {
 				this.fire(WIDGET_EVENT_EDIT);
 			},
 
+			enlarge: () => {
+				if (this.isEnlarged()) {
+					this.restoreSize();
+				}
+				else {
+					this.enlarge();
+				}
+			},
+
+			enlargedKeydown: e => {
+				// Escape restores the size, unless it closes something else (a dialog or a menu) first.
+				if (e.key === 'Escape' && !e.defaultPrevented && overlays_stack.length == 0
+						&& document.querySelector('.menu-popup') === null) {
+					this.restoreSize();
+				}
+			},
+
+			enlargedResize: () => {
+				this.#updateEnlargedPosition();
+				this.resize();
+			},
+
 			focusin: () => {
 				this.fire(WIDGET_EVENT_ENTER, {is_explicit: true});
 			},
@@ -1838,6 +1993,10 @@ class CWidgetBase {
 	#activateEvents() {
 		this._button_actions.addEventListener('click', this._events.actions);
 
+		if (this._button_enlarge !== undefined) {
+			this._button_enlarge.addEventListener('click', this._events.enlarge);
+		}
+
 		if (this._is_editable) {
 			this._button_edit.addEventListener('click', this._events.edit);
 		}
@@ -1854,6 +2013,10 @@ class CWidgetBase {
 	 */
 	#deactivateEvents() {
 		this._button_actions.removeEventListener('click', this._events.actions);
+
+		if (this._button_enlarge !== undefined) {
+			this._button_enlarge.removeEventListener('click', this._events.enlarge);
+		}
 
 		if (this._is_editable) {
 			this._button_edit.removeEventListener('click', this._events.edit);

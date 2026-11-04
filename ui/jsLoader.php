@@ -174,9 +174,11 @@ $translate_strings = [
 		'Copy' => _('Copy'),
 		'Delete' => _('Delete'),
 		'Edit' => _('Edit'),
+		'Enlarge' => _('Enlarge'),
 		'No refresh' => _('No refresh'),
 		'Paste' => _('Paste'),
-		'Refresh interval' => _('Refresh interval')
+		'Refresh interval' => _('Refresh interval'),
+		'Restore size' => _('Restore size')
 	],
 	'class.widget.inaccessible.js' => [
 		'No permissions to referred object or it does not exist!' =>

@@ -23,6 +23,7 @@ use API,
 	CGraphDraw,
 	CMacrosResolverHelper,
 	CRoleHelper,
+	CTimePeriodHelper,
 	CUrl,
 	CWebUser;
 
@@ -36,7 +37,10 @@ class WidgetView extends CControllerDashboardWidgetView {
 			'dashboardid' => 'db dashboard.dashboardid',
 			'contents_width' => 'int32',
 			'contents_height' => 'int32',
-			'has_custom_time_period' => 'in 1'
+			'has_custom_time_period' => 'in 1',
+			// "Compare with" of the dashboard time selector; sent only by graphs that follow the dashboard period.
+			'compare' => 'in '.implode(',', array_keys(CTimePeriodHelper::getComparisonModes())),
+			'compare_value' => 'string'
 		]);
 	}
 
@@ -308,14 +312,10 @@ class WidgetView extends CControllerDashboardWidgetView {
 				$graph_src->setArgument('outer', '1');
 
 				// "Compare with" is drawn by line graphs only (chart.php, chart2.php, chart3.php).
-				if ($this->fields_values['compare_with'] != GRAPH_COMPARE_NONE) {
+				if ($this->getInput('compare', GRAPH_COMPARE_NONE) != GRAPH_COMPARE_NONE) {
 					$graph_src
-						->setArgument('compare', $this->fields_values['compare_with'])
-						->setArgument('compare_value', match ((int) $this->fields_values['compare_with']) {
-							GRAPH_COMPARE_CUSTOM_SHIFT => $this->fields_values['compare_shift'],
-							GRAPH_COMPARE_CUSTOM_DATE => $this->fields_values['compare_date'],
-							default => ''
-						});
+						->setArgument('compare', $this->getInput('compare'))
+						->setArgument('compare_value', $this->getInput('compare_value', ''));
 				}
 			}
 

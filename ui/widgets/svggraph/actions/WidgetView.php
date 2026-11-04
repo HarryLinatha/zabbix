@@ -42,7 +42,11 @@ class WidgetView extends CControllerDashboardWidgetView {
 			'contents_width' => 'int32|ge '.self::GRAPH_WIDTH_MIN.'|le '.self::GRAPH_WIDTH_MAX,
 			'contents_height' => 'int32|ge '.self::GRAPH_HEIGHT_MIN.'|le '.self::GRAPH_HEIGHT_MAX,
 			'has_custom_time_period' => 'in 1',
-			'preview' => 'in 1'
+			'preview' => 'in 1',
+			// "Compare with" of the dashboard time selector; sent only by graphs that follow the dashboard period.
+			'compare' => 'in '.implode(',', array_keys(CTimePeriodHelper::getComparisonModes())),
+			'compare_value' => 'string',
+			'compare_layout' => 'in '.GRAPH_COMPARE_LAYOUT_OVERLAY.','.GRAPH_COMPARE_LAYOUT_SEPARATE
 		]);
 	}
 
@@ -134,18 +138,17 @@ class WidgetView extends CControllerDashboardWidgetView {
 				: ''
 		];
 
-		// "Compare with" period; null if not used or if there is nothing to compare with.
-		$compare_with = (int) $this->fields_values['compare_with'];
-		$compare_value = match ($compare_with) {
-			GRAPH_COMPARE_CUSTOM_SHIFT => $this->fields_values['compare_shift'],
-			GRAPH_COMPARE_CUSTOM_DATE => $this->fields_values['compare_date'],
-			default => ''
-		};
+		/*
+		 * "Compare with" period; null if not used or if there is nothing to compare with. An invalid custom value
+		 * means no comparison (the time selector reports it). Not used in the configuration preview.
+		 */
+		$compare_with = $preview ? GRAPH_COMPARE_NONE : (int) $this->getInput('compare', GRAPH_COMPARE_NONE);
+		$compare_value = $this->getInput('compare_value', '');
 		$graph_data['comparison'] = CTimePeriodHelper::getComparisonPeriod($graph_data['time_period']['time_from'],
 			$graph_data['time_period']['time_to'], $compare_with, $compare_value
 		);
 
-		$graph_data['comparison_layout'] = (int) $this->fields_values['compare_layout'];
+		$graph_data['comparison_layout'] = (int) $this->getInput('compare_layout', GRAPH_COMPARE_LAYOUT_OVERLAY);
 
 		$svg_options = CSvgGraphHelper::get($graph_data, $width, $height);
 		if ($svg_options['errors']) {

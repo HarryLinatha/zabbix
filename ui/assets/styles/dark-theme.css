@@ -5954,12 +5954,14 @@ z-select .list, input[type="text"], input[type="password"], input[type="search"]
     white-space: nowrap; }
     .time-selection-container .time-input .time-input-error {
       margin: -8px 29px 0 0; }
-    .time-selection-container .time-input ul {
+    .time-selection-container .time-input > ul {
       padding: 0 0 10px; }
-    .time-selection-container .time-input li {
+    .time-selection-container .time-input > ul > li {
       display: inline-block;
       vertical-align: baseline;
       padding: 0 0 0 10px; }
+    .time-selection-container .time-input z-select {
+      text-align: left; }
   .time-selection-container .time-quick-range {
     text-align: right;
     white-space: nowrap;

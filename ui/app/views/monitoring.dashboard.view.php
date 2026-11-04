@@ -203,8 +203,9 @@ if (array_key_exists(CWidgetsData::DATA_TYPE_TIME_PERIOD, $data['broadcast_requi
 		(new CFilter())
 			->setProfile($data['dashboard_time_period']['profileIdx'], $data['dashboard_time_period']['profileIdx2'])
 			->setActiveTab($data['active_tab'])
+			// "Compare with" applies to the Graph and Graph (classic) widgets that follow the dashboard period.
 			->addTimeSelector($data['dashboard_time_period']['from'], $data['dashboard_time_period']['to'],
-				$web_layout_mode != ZBX_LAYOUT_KIOSKMODE
+				$web_layout_mode != ZBX_LAYOUT_KIOSKMODE, '', ZBX_FULL_DATE_TIME, ['layout' => true]
 			)
 			->preventHistoryUpdates()
 	);

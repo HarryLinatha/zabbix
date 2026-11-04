@@ -231,6 +231,63 @@ class CFilter extends CDiv {
 	}
 
 	/**
+	 * Make the "Compare with" rows of the time selector: the mode, the input of a custom mode (shift or start date,
+	 * shown only for that mode), their error row and, optionally, the layout (shown when comparing). The rows start
+	 * hidden or at "None", because the comparison lasts for the page view only; gtlc.js shows, applies and validates
+	 * them (CControllerTimeSelectorUpdate).
+	 *
+	 * @param array  $comparison  See addTimeSelector().
+	 * @param string $format      Date and time format of the start date.
+	 *
+	 * @return array
+	 */
+	private static function makeTimeSelectorComparison(array $comparison, string $format): array {
+		$rows = [
+			new CList([
+				new CLabel(_('Compare with'), 'label-compare'),
+				(new CSelect('compare'))
+					->setId('compare')
+					->setFocusableElementId('label-compare')
+					->setValue(GRAPH_COMPARE_NONE)
+					->addOptions(CSelect::createOptionsFromArray(CTimePeriodHelper::getComparisonModes()))
+			]),
+			(new CList([
+				new CLabel(_('Shift'), 'compare_shift'),
+				(new CTextBox('compare_shift'))
+					->setAttribute('placeholder', _('e.g. -76d, -1M'))
+			]))
+				->addClass('js-compare-shift')
+				->addStyle('display: none'),
+			(new CList([
+				new CLabel(_('Start'), 'compare_date'),
+				(new CDateSelector('compare_date'))
+					->setDateFormat($format)
+					->setPlaceholder(_('YYYY-MM-DD hh:mm:ss'))
+			]))
+				->addClass('js-compare-date')
+				->addStyle('display: none'),
+			(new CList([(new CListItem(''))->addClass(ZBX_STYLE_RED)]))
+				->setAttribute('data-error-for', 'compare_value')
+				->addClass(ZBX_STYLE_TIME_INPUT_ERROR)
+				->addStyle('display: none')
+		];
+
+		if ($comparison['layout'] ?? false) {
+			$rows[] = (new CList([
+				new CLabel(_('Layout'), 'compare_layout'),
+				(new CRadioButtonList('compare_layout', GRAPH_COMPARE_LAYOUT_OVERLAY))
+					->addValue(_('Overlay'), GRAPH_COMPARE_LAYOUT_OVERLAY)
+					->addValue(_('Separate graphs'), GRAPH_COMPARE_LAYOUT_SEPARATE)
+					->setModern(true)
+			]))
+				->addClass('js-compare-layout')
+				->addStyle('display: none');
+		}
+
+		return $rows;
+	}
+
+	/**
 	 * Add time selector specific tab. Should be called before any tab is added. Adds two tabs:
 	 * - time selector range change buttons: back, zoom out, forward.
 	 * - time selector range change form with predefined ranges.
@@ -240,11 +297,13 @@ class CFilter extends CDiv {
 	 * @param bool   $visible     Either to make time selector visible or hidden.
 	 * @param string $profileidx  Profile key.
 	 * @param string $format      Date and time format used in CDateSelector.
+	 * @param array|null $comparison  Show "Compare with" controls (applied by gtlc.js, never stored); null to hide.
+	 *        bool  $comparison['layout']  Also show the comparison layout (overlay or separate graphs).
 	 *
 	 * @return CFilter
 	 */
 	public function addTimeSelector(string $from, string $to, bool $visible = true, string $profileidx = '',
-			string $format = ZBX_FULL_DATE_TIME): CFilter {
+			string $format = ZBX_FULL_DATE_TIME, ?array $comparison = null): CFilter {
 		$header = relativeDateToText($from, $to);
 
 		if ($visible) {
@@ -302,6 +361,7 @@ class CFilter extends CDiv {
 						->setAttribute('data-error-for', 'to')
 						->addClass(ZBX_STYLE_TIME_INPUT_ERROR)
 						->addStyle('display: none'),
+					$comparison !== null ? self::makeTimeSelectorComparison($comparison, $format) : null,
 					new CList([
 						new CButton('apply', _('Apply'))
 					])

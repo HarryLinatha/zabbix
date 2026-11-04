@@ -141,3 +141,8 @@ const GROUP_GUI_ACCESS_DISABLED = 3;
 const NAME_DELIMITER = ': ';
 
 const WRAPPER_PADDING_RIGHT = 10;
+
+// "Compare with" modes of graphs (GRAPH_COMPARE_* in defines.inc.php).
+const GRAPH_COMPARE_NONE = 0;
+const GRAPH_COMPARE_CUSTOM_SHIFT = 5;
+const GRAPH_COMPARE_CUSTOM_DATE = 6;

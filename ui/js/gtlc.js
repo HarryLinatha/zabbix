@@ -28,7 +28,12 @@ jQuery(function($) {
 			decrement: $container.find('.js-btn-time-left'),
 			zoomout: $container.find('.btn-time-zoomout'),
 			quickranges: $container.find('.time-quick a'),
-			label: $container.find('.btn-time')
+			label: $container.find('.btn-time'),
+			// "Compare with" (only on pages that offer it, see CFilter::addTimeSelector()).
+			compare: $container.find('#compare'),
+			compare_shift: $container.find('[name=compare_shift]'),
+			compare_date: $container.find('[name=compare_date]'),
+			compare_layout: $container.find('[name=compare_layout]')
 		},
 		request_data = {
 			idx: $container.data('profileIdx'),
@@ -42,6 +47,78 @@ jQuery(function($) {
 
 	endpoint.setArgument('action', 'timeselector.update');
 	endpoint.setArgument('type', PAGE_TYPE_TEXT_RETURN_JSON);
+
+	/*
+	 * "Compare with": the applied comparison is kept in timeControl.comparison for the page view only (graphs read it
+	 * when they load their data). It is applied together with the time period: changing the mode (or the layout)
+	 * applies the current period again, a custom shift or start date is applied with "Apply" or Enter. The server
+	 * validates it before anything is applied. Pages without these controls keep timeControl.comparison null.
+	 */
+	const has_comparison = element.compare.length > 0;
+
+	if (has_comparison) {
+		timeControl.comparison = {compare: GRAPH_COMPARE_NONE, compare_value: '', compare_layout: 0};
+
+		element.compare.on('change', () => {
+			const mode = getComparisonInputs().compare;
+
+			showComparisonInputs(mode);
+
+			if (mode == GRAPH_COMPARE_CUSTOM_SHIFT) {
+				element.compare_shift.focus();
+			}
+			else if (mode == GRAPH_COMPARE_CUSTOM_DATE) {
+				element.compare_date.focus();
+			}
+			else {
+				applyComparison();
+			}
+		});
+
+		element.compare_layout.on('change', applyComparison);
+		element.compare_shift.keydown(submitChangeHandler);
+		element.compare_date.keydown(submitChangeHandler);
+	}
+
+	/**
+	 * Get the comparison entered in the time selector.
+	 *
+	 * @return {object}  Mode (compare), custom shift or start date (compare_value) and layout (compare_layout).
+	 */
+	function getComparisonInputs() {
+		const compare = Number(element.compare[0].value);
+
+		return {
+			compare,
+			compare_value: compare == GRAPH_COMPARE_CUSTOM_SHIFT
+				? element.compare_shift.val().trim()
+				: (compare == GRAPH_COMPARE_CUSTOM_DATE ? element.compare_date.val().trim() : ''),
+			compare_layout: Number(element.compare_layout.filter(':checked').val() || 0)
+		};
+	}
+
+	/**
+	 * Show the input of the selected custom mode, and the layout when comparing.
+	 *
+	 * @param {number} mode  One of GRAPH_COMPARE_* values.
+	 */
+	function showComparisonInputs(mode) {
+		$container.find('.js-compare-shift').toggle(mode == GRAPH_COMPARE_CUSTOM_SHIFT);
+		$container.find('.js-compare-date').toggle(mode == GRAPH_COMPARE_CUSTOM_DATE);
+		$container.find('.js-compare-layout').toggle(mode != GRAPH_COMPARE_NONE);
+		$container.find('[data-error-for="compare_value"]').hide();
+	}
+
+	/**
+	 * Apply the entered comparison to the current (applied) time period.
+	 */
+	function applyComparison() {
+		$.publish('timeselector.rangechange', {
+			from: request_data.from,
+			to: request_data.to,
+			apply_comparison: true
+		});
+	}
 
 	$.subscribe('timeselector.rangechange timeselector.decrement timeselector.increment timeselector.zoomout' +
 		' timeselector.rangeoffset',
@@ -73,12 +150,13 @@ jQuery(function($) {
 			action = 'timeselector.rangechange';
 			data = {
 				from: element.from.val(),
-				to: element.to.val()
+				to: element.to.val(),
+				apply_comparison: has_comparison
 			}
 		}
 		else if (element.quickranges.index($target) != -1) {
 			action = 'timeselector.rangechange';
-			data = $target.data();
+			data = {...$target.data(), apply_comparison: has_comparison};
 			element.quickranges.removeClass('selected');
 			$target.addClass('selected');
 		}
@@ -89,7 +167,7 @@ jQuery(function($) {
 	});
 
 	/**
-	 * Trigger timeselector.rangechange event on 'enter' key press in 'from' or 'to' input field.
+	 * Trigger timeselector.rangechange event on 'enter' key press in 'from', 'to' or a "Compare with" input field.
 	 *
 	 * @param {object} event  jQuery event object.
 	 */
@@ -97,7 +175,8 @@ jQuery(function($) {
 		if (event.which == 13) { // Enter
 			$.publish('timeselector.rangechange', {
 				from: element.from.val(),
-				to: element.to.val()
+				to: element.to.val(),
+				apply_comparison: has_comparison
 			});
 			return cancelEvent(event);
 		}
@@ -185,6 +264,14 @@ jQuery(function($) {
 			'to': (event.namespace === 'rangechange') ? data.to : request_data.to
 		};
 
+		// A comparison entered in the time selector is sent for validation, and applied if the request succeeds.
+		const comparison = (event.namespace === 'rangechange' && data.apply_comparison) ? getComparisonInputs() : null;
+
+		if (comparison !== null) {
+			args.compare = comparison.compare;
+			args.compare_value = comparison.compare_value;
+		}
+
 		switch (event.namespace) {
 			case 'rangeoffset':
 				args.from_offset = data.from_offset;
@@ -243,6 +330,12 @@ jQuery(function($) {
 					delete request_data.fields_errors;
 				}
 				else {
+					if (comparison !== null) {
+						timeControl.comparison = comparison;
+					}
+
+					delete request_data.apply_comparison;
+
 					if (!prevent_history_updates) {
 						updateUrlArguments(request_data.from, request_data.to);
 					}
@@ -603,6 +696,78 @@ var timeControl = {
 
 	// options
 	refreshPage: true,
+
+	/**
+	 * "Compare with" applied in the time selector, for the page view only: {compare, compare_value, compare_layout}.
+	 * Null on pages that do not offer it.
+	 */
+	comparison: null,
+
+	/**
+	 * Set the "Compare with" arguments of a graph image URL (chart.php) to the applied comparison.
+	 *
+	 * @param {Curl} curl
+	 */
+	setComparisonArguments: function(curl) {
+		if (this.comparison === null) {
+			return;
+		}
+
+		if (this.comparison.compare != GRAPH_COMPARE_NONE) {
+			curl.setArgument('compare', this.comparison.compare);
+			curl.setArgument('compare_value', this.comparison.compare_value);
+		}
+		else {
+			curl.unsetArgument('compare');
+			curl.unsetArgument('compare_value');
+		}
+	},
+
+	/**
+	 * Get the "Compare with" request fields of a dashboard graph widget. The comparison of the time selector applies to
+	 * graphs that follow the dashboard time period, directly or through a graph prototype widget that does; graphs
+	 * with a custom time period or following another widget are not compared.
+	 *
+	 * @param {CWidget} widget
+	 * @param {boolean} with_layout  Include the layout (compare_layout; the Graph widget only).
+	 *
+	 * @return {object}  compare, compare_value (and compare_layout), or an empty object if not compared.
+	 */
+	getWidgetComparisonRequestData: function(widget, with_layout) {
+		if (this.comparison === null || this.comparison.compare == GRAPH_COMPARE_NONE) {
+			return {};
+		}
+
+		const {compare, compare_value, compare_layout} = this.comparison;
+		const request_data = with_layout ? {compare, compare_value, compare_layout} : {compare, compare_value};
+
+		// The time period source of the widget, and of its graph prototype widget (one level: prototypes do not nest).
+		let source = widget;
+
+		for (let level = 0; level < 2 && source; level++) {
+			const referred_data = source.getFieldsReferredData();
+
+			if (!referred_data.has('time_period') || referred_data.get('time_period').descriptor === null) {
+				return {};
+			}
+
+			const descriptor = referred_data.get('time_period').descriptor;
+
+			if (descriptor.sender_type === 'dashboard') {
+				return request_data;
+			}
+
+			if (descriptor.sender_type !== 'widget' || descriptor.widget_type !== 'graphprototype') {
+				return {};
+			}
+
+			source = ZABBIX.Dashboard
+				.getDashboardPage(widget._dashboard_page.unique_id)
+				.getWidget(descriptor.sender_unique_id);
+		}
+
+		return {};
+	},
 
 	addObject: function(id, time, objData) {
 		if (typeof this.objectList[id] !== 'undefined' && objData['reloadOnAdd'] !== 1) {

@@ -36,7 +36,10 @@ class CControllerTimeSelectorUpdate extends CController {
 			'from' =>			'required|string',
 			'to' =>				'required|string',
 			'from_offset' =>	'int32|ge 0',
-			'to_offset' =>		'int32|ge 0'
+			'to_offset' =>		'int32|ge 0',
+			// "Compare with" of pages that offer it in the time selector: only validated, never stored.
+			'compare' =>		'in '.implode(',', array_keys(CTimePeriodHelper::getComparisonModes())),
+			'compare_value' =>	'string'
 		];
 
 		$ret = $this->validateInput($fields);
@@ -131,6 +134,16 @@ class CControllerTimeSelectorUpdate extends CController {
 				$fields_errors['from'] = _n('Maximum time period to display is %1$s day.',
 					'Maximum time period to display is %1$s days.', (int) round($max_period / SEC_PER_DAY)
 				);
+			}
+		}
+
+		if ($this->hasInput('compare')) {
+			$compare_error = CTimePeriodHelper::validateComparisonValue((int) $this->getInput('compare'),
+				$this->getInput('compare_value', ''), _('Compare with')
+			);
+
+			if ($compare_error !== null) {
+				$fields_errors['compare_value'] = $compare_error;
 			}
 		}
 

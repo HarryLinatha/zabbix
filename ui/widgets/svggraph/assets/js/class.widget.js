@@ -98,6 +98,11 @@ class CWidgetSvgGraph extends CWidget {
 			request_data.has_custom_time_period = 1;
 		}
 
+		// "Compare with" of the dashboard time selector.
+		if (typeof timeControl !== 'undefined') {
+			Object.assign(request_data, timeControl.getWidgetComparisonRequestData(this, true));
+		}
+
 		return request_data;
 	}
 

@@ -104,8 +104,7 @@ class CSvgGraphHelper {
 
 		// Separate graphs need room for two readable graphs; otherwise both periods are drawn in one graph.
 		if ($options['comparison'] !== null
-				&& ($options['comparison_layout'] ?? WidgetForm::COMPARE_LAYOUT_OVERLAY)
-					== WidgetForm::COMPARE_LAYOUT_SEPARATE
+				&& ($options['comparison_layout'] ?? GRAPH_COMPARE_LAYOUT_OVERLAY) == GRAPH_COMPARE_LAYOUT_SEPARATE
 				&& $svg_height >= CSvgGraph::getHeightForCanvas(self::SEPARATE_GRAPHS_MIN_CANVAS_HEIGHT, false)
 					+ CSvgGraph::getHeightForCanvas(self::SEPARATE_GRAPHS_MIN_CANVAS_HEIGHT)
 				&& array_filter($metrics, [self::class, 'isComparison'])) {

@@ -802,7 +802,7 @@ define('MAP_LINK_DRAWTYPE_BOLD_LINE',		2);
 define('MAP_LINK_DRAWTYPE_DOT',				3);
 define('MAP_LINK_DRAWTYPE_DASHED_LINE',		4);
 
-// "Compare with" modes of graph widgets: overlay the same series for an earlier (or custom) period.
+// "Compare with" modes of graphs (chosen in the time selector): the same series for an earlier (or custom) period.
 define('GRAPH_COMPARE_NONE',			0);
 define('GRAPH_COMPARE_DAY',				1);
 define('GRAPH_COMPARE_WEEK',			2);
@@ -810,6 +810,10 @@ define('GRAPH_COMPARE_MONTH',			3);
 define('GRAPH_COMPARE_YEAR',			4);
 define('GRAPH_COMPARE_CUSTOM_SHIFT',	5);
 define('GRAPH_COMPARE_CUSTOM_DATE',		6);
+
+// "Compare with" layouts of the Graph widget: comparison series in the same graph, or in a second graph below it.
+define('GRAPH_COMPARE_LAYOUT_OVERLAY',	0);
+define('GRAPH_COMPARE_LAYOUT_SEPARATE',	1);
 
 define('ZBX_SLA_MAX_REPORTING_PERIODS',		100);
 define('ZBX_SLA_DEFAULT_REPORTING_PERIODS',	20);

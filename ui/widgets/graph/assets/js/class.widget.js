@@ -154,7 +154,9 @@ class CWidgetGraph extends CWidget {
 
 		return {
 			...super.getUpdateRequestData(),
-			has_custom_time_period: has_custom_time_period ? 1 : undefined
+			has_custom_time_period: has_custom_time_period ? 1 : undefined,
+			// "Compare with" of the dashboard time selector.
+			...(typeof timeControl !== 'undefined' ? timeControl.getWidgetComparisonRequestData(this, false) : {})
 		}
 	}
 

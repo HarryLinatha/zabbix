@@ -1454,13 +1454,6 @@ class GraphTimePeriodTabIndicatorItem extends TabIndicatorItem {
 	}
 
 	getValue() {
-		// Marked when "Compare with" is used (the select value is a string; GRAPH_COMPARE_NONE is 0).
-		const compare_with = document.querySelector('z-select[name="compare_with"]');
-
-		if (compare_with !== null && compare_with.value != 0) {
-			return true;
-		}
-
 		const element = document.querySelector('input[name="time_period[data_source]"]');
 
 		if (element !== null) {

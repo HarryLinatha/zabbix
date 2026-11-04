@@ -1364,14 +1364,20 @@ select {
 			margin: -8px 29px 0 0;
 		}
 
-		ul {
+		// Rows only (child selectors), not lists inside the controls, e.g. the options of "Compare with" (z-select).
+		> ul {
 			padding: 0 0 10px;
 		}
 
-		li {
+		> ul > li {
 			display: inline-block;
 			vertical-align: baseline;
 			padding: 0 0 0 10px;
+		}
+
+		// Options of "Compare with" are aligned as in other selects.
+		z-select {
+			text-align: left;
 		}
 	}
 

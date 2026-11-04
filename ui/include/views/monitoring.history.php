@@ -233,8 +233,10 @@ else {
 		->setControls((new CTag('nav', true, $header['right']))->setAttribute('aria-label', _('Content controls')));
 
 	if ($data['itemids'] && $data['action'] !== HISTORY_LATEST) {
+		// "Compare with" for graphs (classic graph images; the comparison is drawn in the same graph).
 		$filter_form->addTimeSelector($screen->timeline['from'], $screen->timeline['to'],
-			$web_layout_mode != ZBX_LAYOUT_KIOSKMODE
+			$web_layout_mode != ZBX_LAYOUT_KIOSKMODE, '', ZBX_FULL_DATE_TIME,
+			$data['action'] == HISTORY_GRAPH || $data['action'] == HISTORY_BATCH_GRAPH ? [] : null
 		);
 	}
 

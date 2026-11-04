@@ -174,7 +174,8 @@
 				// SCREEN_RESOURCE_HISTORY
 				case 17:
 					if (screen.data.action == 'showgraph') {
-						self.refreshImg(id);
+						// The graph of Latest data follows "Compare with" of the time selector.
+						self.refreshImg(id, null, true);
 					}
 					else {
 						if ('itemids' in screen.data) {
@@ -318,7 +319,12 @@
 			}
 		},
 
-		refreshImg: function(id, successAction) {
+		/**
+		 * @param {string}   id
+		 * @param {function} successAction
+		 * @param {boolean}  set_comparison  Set the "Compare with" arguments of the time selector (timeControl).
+		 */
+		refreshImg: function(id, successAction, set_comparison = false) {
 			var screen = this.screens[id],
 				request_start = new CDate().getTime();
 
@@ -346,6 +352,10 @@
 					url.setArgument('screenid', empty(screen.screenid) ? null : screen.screenid);
 					url.setArgument('from', screen.timeline.from);
 					url.setArgument('to', screen.timeline.to);
+
+					if (set_comparison) {
+						timeControl.setComparisonArguments(url);
+					}
 					// Prevent image caching.
 					url.setArgument('_', request_start.toString(34));
 

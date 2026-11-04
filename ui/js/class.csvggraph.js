@@ -675,9 +675,8 @@
 
 			/*
 			 * Find values, in this graph and in the graphs linked to it (see getLinkedGraphs()). "Compare with" series
-			 * are drawn below the main series, but listed after them, so that the row limit cuts comparison rows
-			 * first. A comparison series ends early if its period is shorter than the graph period: its points past the
-			 * end are left out (and not counted) and their highlight is hidden.
+			 * are drawn below the main series, but listed after them. A comparison series ends early if its period is
+			 * shorter than the graph period: its points past the end are left out and their highlight is hidden.
 			 */
 			const linked_graphs = getLinkedGraphs(graph);
 			var points = [],
@@ -685,8 +684,7 @@
 
 			linked_graphs.flatMap((linked_graph) => findValues(linked_graph[0], offsetX).map((point) => ({
 				...point,
-				in_graph: linked_graph[0] === graph[0],
-				from_ts: linked_graph.data('options').timePeriod.from_ts
+				in_graph: linked_graph[0] === graph[0]
 			}))).forEach(function(point) {
 				if (!point.g.hasAttribute('data-comparison')) {
 					points.push(point);
@@ -704,7 +702,7 @@
 
 			points = points.concat(comparison_points);
 
-			var points_total = points.length,
+			var points_total,
 				show_hint = false,
 				xy_point = false,
 				tolerance;
@@ -729,63 +727,119 @@
 				});
 			}
 
+			/*
+			 * Group the points into hint rows. A "Compare with" series shares the row of its main series (same
+			 * data-pair): "name: main value / comparison value @ comparison name", and the header shows both times.
+			 * Other series have a row each, as without comparison. Rows are in the order of their first point, so
+			 * rows of main series come first. A row is shown if one of its points is shown.
+			 */
+			const rows = [];
+			const rows_by_pair = new Map();
+
+			points.forEach((point) => {
+				const pair = point.g.getAttribute('data-pair');
+				let row = pair !== null ? rows_by_pair.get(pair) : undefined;
+
+				if (row === undefined) {
+					row = {main: null, comparison: null};
+					rows.push(row);
+
+					if (pair !== null) {
+						rows_by_pair.set(pair, row);
+					}
+				}
+
+				row[point.g.hasAttribute('data-comparison') ? 'comparison' : 'main'] = point;
+			});
+
+			points_total = xy_point === false ? rows.length : 1;
+
 			// Make html for hintbox.
 			if (show_hint) {
 				html = jQuery('<ul>');
 			}
 			var rows_added = 0;
 
-			points.forEach(function(point) {
-				var point_highlight = point.g.querySelectorAll('.svg-point-highlight')[0];
-				const is_comparison = point.g.hasAttribute('data-comparison');
+			// Comparison of the main graph (the first linked graph): its start time and short name.
+			const comparison = linked_graphs[0].data('options').comparison;
+			let has_comparison_values = false;
 
-				if (point.v !== null && (xy_point === false || xy_point === point)) {
-					point_highlight.setAttribute('cx', point.x);
-					point_highlight.setAttribute('cy', point.y);
+			rows.forEach((row) => {
+				let is_row_shown = false;
 
-					if (point.p > 0) {
-						point_highlight.setAttribute('cx', parseInt(point.x) + parseInt(point.p));
+				for (const point of [row.main, row.comparison]) {
+					if (point === null) {
+						continue;
 					}
 
-					if (show_hint && data.hintMaxRows > rows_added) {
-						let text = point.g.getAttribute('data-metric') + ': ' + point.v;
+					const point_highlight = point.g.querySelectorAll('.svg-point-highlight')[0];
 
-						// Show the real time of a comparison value; the header shows the time of the main period.
-						if (is_comparison) {
-							const comparison_time = new CDate(
-								(point.from_ts + offset + Number(point.g.getAttribute('data-time-shift'))) * 1000
-							);
+					if (point.v !== null && (xy_point === false || xy_point === point)) {
+						point_highlight.setAttribute('cx', point.x);
+						point_highlight.setAttribute('cy', point.y);
 
-							text += ' (' + comparison_time.format(PHP_ZBX_FULL_DATE_TIME) + ')';
+						if (point.p > 0) {
+							point_highlight.setAttribute('cx', parseInt(point.x) + parseInt(point.p));
 						}
 
-						jQuery('<li>')
-							.text(text)
-							.append(
-								jQuery('<span>')
-									.css('background-color', point.g.getAttribute('data-color'))
-									.addClass('svg-graph-hintbox-item-color')
-							)
-							.appendTo(html);
-						rows_added++;
+						is_row_shown = true;
+					}
+					else {
+						point_highlight.setAttribute('cx', -10);
+						point_highlight.setAttribute('cy', -10);
 					}
 				}
-				else {
-					point_highlight.setAttribute('cx', -10);
-					point_highlight.setAttribute('cy', -10);
+
+				if (!is_row_shown || !show_hint || data.hintMaxRows <= rows_added) {
+					return;
 				}
+
+				// When one point is hovered exactly, its row still shows both values (only that point is highlighted).
+				const main_value = row.main !== null ? row.main.v : null;
+				const comparison_value = row.comparison !== null ? row.comparison.v : null;
+				const color_point = row.main ?? row.comparison;
+
+				let text = (row.main !== null
+					? row.main.g.getAttribute('data-metric')
+					: row.comparison.g.getAttribute('data-main-metric') ?? row.comparison.g.getAttribute('data-metric')
+				) + ': ' + (main_value ?? '—');
+
+				if (comparison_value !== null) {
+					text += ' / ' + comparison_value;
+
+					if (comparison !== null) {
+						text += ' @ ' + comparison.type_label;
+					}
+
+					has_comparison_values = true;
+				}
+
+				jQuery('<li>')
+					.text(text)
+					.append(
+						jQuery('<span>')
+							.css('background-color', color_point.g.getAttribute('data-color'))
+							.addClass('svg-graph-hintbox-item-color')
+					)
+					.appendTo(html);
+				rows_added++;
 			});
 
 			if (show_hint) {
-				// Calculate time at mouse position, in the period of the main graph (the first linked graph).
-				const time = new CDate((linked_graphs[0].data('options').timePeriod.from_ts + offset) * 1000);
+				// Time at mouse position in the main period and, if comparison values are shown, in the comparison period.
+				let header = new CDate((linked_graphs[0].data('options').timePeriod.from_ts + offset) * 1000)
+					.format(PHP_ZBX_FULL_DATE_TIME);
+
+				if (has_comparison_values && comparison !== null) {
+					header += ' vs ' + new CDate((comparison.from_ts + offset) * 1000).format(PHP_ZBX_FULL_DATE_TIME);
+				}
 
 				html = jQuery('<div>')
 					.addClass('svg-graph-hintbox')
 					.append(
 						jQuery('<div>')
 							.addClass('header')
-							.html(time.format(PHP_ZBX_FULL_DATE_TIME))
+							.text(header)
 					)
 					.append(html)
 					.append(points_total > data.hintMaxRows
@@ -858,6 +912,7 @@
 						isTriggerHintBoxFrozen: false,
 						spp: svg_options.spp || null,
 						timePeriod: svg_options.time_period,
+						comparison: svg_options.comparison || null,
 						minPeriod: svg_options.min_period,
 						sbox: svg_options.sbox,
 						boxing: false

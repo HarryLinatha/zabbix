@@ -135,13 +135,14 @@ class WidgetView extends CControllerDashboardWidgetView {
 		];
 
 		// "Compare with" period; null if not used or if there is nothing to compare with.
+		$compare_with = (int) $this->fields_values['compare_with'];
+		$compare_value = match ($compare_with) {
+			GRAPH_COMPARE_CUSTOM_SHIFT => $this->fields_values['compare_shift'],
+			GRAPH_COMPARE_CUSTOM_DATE => $this->fields_values['compare_date'],
+			default => ''
+		};
 		$graph_data['comparison'] = CTimePeriodHelper::getComparisonPeriod($graph_data['time_period']['time_from'],
-			$graph_data['time_period']['time_to'], (int) $this->fields_values['compare_with'],
-			match ((int) $this->fields_values['compare_with']) {
-				GRAPH_COMPARE_CUSTOM_SHIFT => $this->fields_values['compare_shift'],
-				GRAPH_COMPARE_CUSTOM_DATE => $this->fields_values['compare_date'],
-				default => ''
-			}
+			$graph_data['time_period']['time_to'], $compare_with, $compare_value
 		);
 
 		$graph_data['comparison_layout'] = (int) $this->fields_values['compare_layout'];
@@ -159,6 +160,16 @@ class WidgetView extends CControllerDashboardWidgetView {
 				'time_period' => $this->fields_values['time_period'],
 				'hint_max_rows' => ZBX_WIDGET_ROWS
 			]);
+
+			// For the value hint: the comparison time in its header and the short comparison name in its rows.
+			if ($graph_data['comparison'] !== null) {
+				$svg_options['data']['comparison'] = [
+					'from_ts' => $graph_data['comparison']['from_ts'],
+					'type_label' => CTimePeriodHelper::getComparisonTypeLabel($compare_with, $compare_value,
+						$graph_data['comparison']['from_ts']
+					)
+				];
+			}
 
 			// The comparison graph of the "Separate graphs" layout cannot zoom (its period follows the main graph).
 			if (array_key_exists('panels', $svg_options['data'])) {

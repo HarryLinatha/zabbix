@@ -266,4 +266,28 @@ class CTimePeriodHelperTest extends TestCase {
 			$this->assertIsString($error);
 		}
 	}
+
+	public static function dataGetComparisonTypeLabel(): array {
+		return [
+			[GRAPH_COMPARE_DAY, '', 'prev 1day'],
+			[GRAPH_COMPARE_WEEK, '', 'prev 1week'],
+			[GRAPH_COMPARE_MONTH, '', 'prev 1month'],
+			[GRAPH_COMPARE_YEAR, '', 'prev 1year'],
+			[GRAPH_COMPARE_CUSTOM_SHIFT, '-76d', 'prev 76d'],
+			[GRAPH_COMPARE_CUSTOM_SHIFT, '-1M', 'prev 1M'],
+			[GRAPH_COMPARE_CUSTOM_SHIFT, '2h', 'next 2h'],
+			[GRAPH_COMPARE_CUSTOM_DATE, 'now-1M/M', 'from 2026-10-01 00:00']
+		];
+	}
+
+	/**
+	 * @dataProvider dataGetComparisonTypeLabel
+	 */
+	public function testGetComparisonTypeLabel(int $mode, string $value, string $expected): void {
+		$timezone = new DateTimeZone('Asia/Jakarta');
+
+		$this->assertSame($expected, CTimePeriodHelper::getComparisonTypeLabel($mode, $value,
+			self::ts('2026-10-01 00:00:00', 'Asia/Jakarta'), $timezone
+		));
+	}
 }

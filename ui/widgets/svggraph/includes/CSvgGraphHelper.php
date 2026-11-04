@@ -703,13 +703,18 @@ class CSvgGraphHelper {
 		}
 
 		$result = [];
+		$pair = 0;
 
 		foreach ($metrics as $metric) {
-			$result[] = $metric;
-
 			if (!array_key_exists($metric['data_set'], $compared_data_sets)) {
+				$result[] = $metric;
+
 				continue;
 			}
+
+			// The original and its copy share a pair number, so that the value hint shows both in one row.
+			$metric['options']['compare_pair'] = $pair++;
+			$result[] = $metric;
 
 			$metric['options']['comparison'] = ['length' => $comparison['to_ts'] - $comparison['from_ts']];
 			$metric['options']['timeshift'] += $comparison['shift'];
@@ -733,11 +738,13 @@ class CSvgGraphHelper {
 
 	/**
 	 * Add the comparison period to the names of comparison metrics, after all names are final. The period is taken
-	 * from the metric's own time period, so that a data set time shift is included in the dates.
+	 * from the metric's own time period, so that a data set time shift is included in the dates. The name without the
+	 * period is kept for the value hint, which shows the comparison value in the row of the main metric.
 	 */
 	private static function applyComparisonNames(array &$metrics): void {
 		foreach ($metrics as &$metric) {
 			if (self::isComparison($metric)) {
+				$metric['options']['comparison']['main_name'] = $metric['name'];
 				$metric['name'] .= ' ('.CTimePeriodHelper::getComparisonLabel($metric['time_period']['time_from'],
 					$metric['time_period']['time_to']
 				).')';

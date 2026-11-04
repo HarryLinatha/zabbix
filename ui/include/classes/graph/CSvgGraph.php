@@ -1383,23 +1383,25 @@ class CSvgGraph extends CSvg {
 	}
 
 	/**
-	 * Get the attributes marking a "Compare with" series for the hint box: the total time shift of the series and the
-	 * length of the comparison period, both in seconds. No attributes for other series.
+	 * Get the attributes marking "Compare with" series for the hint box. A comparison series gets the length of the
+	 * comparison period (in seconds) and the name of its main series; it and its main series get the same pair number
+	 * (data-pair), so that the hint shows both values in one row. No attributes for series without comparison.
 	 *
 	 * @param array $options  Metric options.
 	 *
 	 * @return array
 	 */
 	public static function getComparisonAttributes(array $options): array {
-		if (!array_key_exists('comparison', $options)) {
-			return [];
+		if (array_key_exists('comparison', $options)) {
+			return [
+				'data-comparison' => 1,
+				'data-comparison-length' => $options['comparison']['length'],
+				'data-pair' => $options['compare_pair'],
+				'data-main-metric' => $options['comparison']['main_name']
+			];
 		}
 
-		return [
-			'data-comparison' => 1,
-			'data-time-shift' => $options['timeshift'],
-			'data-comparison-length' => $options['comparison']['length']
-		];
+		return array_key_exists('compare_pair', $options) ? ['data-pair' => $options['compare_pair']] : [];
 	}
 
 	/**

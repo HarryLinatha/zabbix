@@ -378,6 +378,44 @@ class CTimePeriodHelper {
 	}
 
 	/**
+	 * Get a short name of the comparison for value hints, e.g. "prev 1day" or, for a custom start date, "from
+	 * 2026-10-01 00:00". A custom shift is shown as entered, without its sign: "-76d" is "prev 76d", "2h" is "next 2h".
+	 *
+	 * @param int               $mode     One of GRAPH_COMPARE_* constants.
+	 * @param string            $value    Time shift for GRAPH_COMPARE_CUSTOM_SHIFT.
+	 * @param int               $from_ts  Start of the comparison period (shown for GRAPH_COMPARE_CUSTOM_DATE).
+	 * @param DateTimeZone|null $timezone
+	 *
+	 * @return string
+	 */
+	public static function getComparisonTypeLabel(int $mode, string $value, int $from_ts,
+			?DateTimeZone $timezone = null): string {
+		switch ($mode) {
+			case GRAPH_COMPARE_DAY:
+				return _('prev 1day');
+
+			case GRAPH_COMPARE_WEEK:
+				return _('prev 1week');
+
+			case GRAPH_COMPARE_MONTH:
+				return _('prev 1month');
+
+			case GRAPH_COMPARE_YEAR:
+				return _('prev 1year');
+
+			case GRAPH_COMPARE_CUSTOM_SHIFT:
+				return $value[0] === '-' ? _s('prev %1$s', substr($value, 1)) : _s('next %1$s', $value);
+
+			default:
+				$timezone = $timezone ?? new DateTimeZone(date_default_timezone_get());
+
+				return _s('from %1$s',
+					(new DateTimeImmutable('@'.$from_ts))->setTimezone($timezone)->format('Y-m-d H:i')
+				);
+		}
+	}
+
+	/**
 	 * Format a comparison period for legends: "Y-m-d H:i – H:i" if it starts and ends on the same day, otherwise
 	 * "Y-m-d H:i – Y-m-d H:i".
 	 *

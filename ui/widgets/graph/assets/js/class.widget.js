@@ -69,6 +69,9 @@ class CWidgetGraph extends CWidget {
 				return;
 			}
 
+			const is_height_changed =
+				timeControl.objectList[`graph_${this._unique_id}`].objDims.graphHeight != graph_size.height;
+
 			timeControl.objectList[`graph_${this._unique_id}`].objDims.width = graph_size.width;
 			timeControl.objectList[`graph_${this._unique_id}`].objDims.graphHeight = graph_size.height;
 
@@ -78,6 +81,27 @@ class CWidgetGraph extends CWidget {
 			image_curl.setArgument('height', graph_size.height);
 			image_curl.setArgument('_', (new Date).getTime().toString(34));
 			image.src = image_curl.getUrl();
+
+			/*
+			 * The height of the plot area that can be selected for zooming (zbx_sbox) depends on the image height,
+			 * which changes when the widget is enlarged or restored. It is requested like on image refresh, and set on
+			 * the image shown when the answer arrives (a refresh may have replaced the image meanwhile).
+			 */
+			if (is_height_changed && jQuery(image).data('zbx_sbox') !== undefined) {
+				// The relative image URL of the time control (image.src is absolute, getImageSboxHeight() needs the file).
+				const sbox_curl = new Curl(timeControl.objectList[`graph_${this._unique_id}`].src);
+
+				sbox_curl.setArgument('width', graph_size.width);
+				sbox_curl.setArgument('height', graph_size.height);
+
+				flickerfreeScreen.getImageSboxHeight(sbox_curl, (height) => {
+					const sbox = jQuery(`#graph_${this._unique_id}`).data('zbx_sbox');
+
+					if (sbox !== undefined) {
+						sbox.height = parseInt(height, 10);
+					}
+				});
+			}
 		}
 	}
 

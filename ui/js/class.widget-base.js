@@ -1518,13 +1518,13 @@ class CWidgetBase {
 	}
 
 	/**
-	 * Enlarge the widget: show it over the visible part of the dashboard page, across its full width, with the other
-	 * widgets dimmed below. The widget stays the same live widget (it is only re-sized and re-rendered), so the time
-	 * period, hints, zooming and refreshing work as usual. Nothing is saved: the widget gets its place back with the
-	 * header button, Escape, a click on the dimmed area, on leaving the page or on editing the dashboard.
+	 * Enlarge the widget: show it over the whole page, with a margin around it, and dim the rest of the page (sidebar,
+	 * header, time selector and the other widgets). The widget stays the same live widget (it is only re-sized and
+	 * re-rendered), so hints, zooming and refreshing work as usual. Nothing is saved: the widget gets its place back
+	 * with the header button, Escape, a click on the dimmed area, on leaving the page or on editing the dashboard.
 	 *
-	 * The widget is positioned in dashboard grid coordinates (not fixed to the viewport), so it moves with the page
-	 * like the other widgets; it is placed at the top of the visible part of the grid and fills the viewport height.
+	 * The widget and the dimming layer stay in the dashboard grid (fixed to the viewport); while enlarged, the grid's
+	 * stacking context is raised above the sidebar (z-index 998) and below dialogs, menus and messages (1000+).
 	 */
 	enlarge() {
 		const grid = this._target.offsetParent;
@@ -1533,18 +1533,34 @@ class CWidgetBase {
 			return;
 		}
 
-		// The theme's dialog backdrop, placed in the grid: above other widgets (and their headers, z-index 3-5),
-		// below the enlarged widget, and below the page header and time selector.
+		// Dark in all themes; above other widgets (and their headers, z-index 3-5), below the enlarged widget.
 		const backdrop = document.createElement('div');
 
-		backdrop.classList.add('overlay-bg');
-		Object.assign(backdrop.style, {position: 'absolute', zIndex: 6});
+		Object.assign(backdrop.style, {
+			position: 'fixed',
+			inset: 0,
+			zIndex: 6,
+			backgroundColor: 'rgba(0, 0, 0, .5)'
+		});
 		backdrop.addEventListener('click', () => this.restoreSize());
 		grid.appendChild(backdrop);
 
-		this.#enlarged = {grid, backdrop};
-		this._target.style.zIndex = 7;
-		this.#updateEnlargedPosition();
+		this.#enlarged = {grid, backdrop, grid_z_index: grid.style.zIndex};
+
+		grid.style.zIndex = 999;
+
+		const margin = 'clamp(16px, 3vmin, 40px)';
+
+		Object.assign(this._target.style, {
+			position: 'fixed',
+			top: margin,
+			right: margin,
+			bottom: margin,
+			left: margin,
+			width: 'auto',
+			height: 'auto',
+			zIndex: 7
+		});
 
 		this._button_enlarge.title = t('Restore size');
 		this._button_enlarge.classList.replace(ZBX_ICON_FULLSCREEN, ZBX_ICON_MINIMIZE);
@@ -1566,10 +1582,13 @@ class CWidgetBase {
 		document.removeEventListener('keydown', this._events.enlargedKeydown);
 		window.removeEventListener('resize', this._events.enlargedResize);
 
-		this.#enlarged.backdrop.remove();
+		const {grid, backdrop, grid_z_index} = this.#enlarged;
+
+		backdrop.remove();
+		grid.style.zIndex = grid_z_index;
 		this.#enlarged = null;
 
-		this._target.style.zIndex = '';
+		Object.assign(this._target.style, {position: '', right: '', bottom: '', zIndex: ''});
 		this.setPos(this._pos);
 
 		this._button_enlarge.title = t('Enlarge');
@@ -1578,29 +1597,6 @@ class CWidgetBase {
 		if (this._state === WIDGET_STATE_ACTIVE) {
 			this.resize();
 		}
-	}
-
-	/**
-	 * Place an enlarged widget at the top of the visible part of the dashboard grid, and size the backdrop to cover
-	 * the grid and the widget.
-	 */
-	#updateEnlargedPosition() {
-		const {grid, backdrop} = this.#enlarged;
-		const grid_rect = grid.getBoundingClientRect();
-
-		// Space left below the widget, and the smallest height (for very small windows).
-		const margin_bottom = 8;
-		const min_height = 300;
-
-		const top = Math.max(0, -grid_rect.top);
-		const height = Math.max(min_height,
-			document.documentElement.clientHeight - Math.max(0, grid_rect.top) - margin_bottom
-		);
-
-		Object.assign(this._target.style, {left: 0, top: `${top}px`, width: '100%', height: `${height}px`});
-		Object.assign(backdrop.style, {left: 0, top: 0, width: '100%',
-			height: `${Math.max(grid.offsetHeight, top + height)}px`
-		});
 	}
 
 	/**
@@ -1961,7 +1957,6 @@ class CWidgetBase {
 			},
 
 			enlargedResize: () => {
-				this.#updateEnlargedPosition();
 				this.resize();
 			},
 
